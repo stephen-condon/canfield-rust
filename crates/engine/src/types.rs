@@ -35,7 +35,7 @@ pub struct Card {
     pub face_up: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ZoneId {
     Stock,
     Waste,
@@ -63,7 +63,7 @@ impl ZoneId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameState {
     pub base_rank: Rank,
