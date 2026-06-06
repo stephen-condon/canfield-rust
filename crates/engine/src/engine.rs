@@ -121,6 +121,169 @@ pub fn first_face_up_index(column: &[Card]) -> usize {
     column.iter().position(|c| c.face_up).unwrap_or(column.len())
 }
 
+// ---- Private helpers ----
+
+fn clone_state(state: &GameState) -> GameState {
+    state.clone()
+}
+
+fn top_card_of<'a>(state: &'a GameState, zone: ZoneId) -> Option<&'a Card> {
+    match zone {
+        ZoneId::Waste => state.waste.last(),
+        ZoneId::Reserve => state.reserve.last(),
+        ZoneId::Tableau(col) => state.tableau[col].last(),
+        ZoneId::Foundation(idx) => state.foundations[idx].last(),
+        ZoneId::Stock => state.stock.last(),
+    }
+}
+
+fn remove_top_card(state: &mut GameState, zone: ZoneId) {
+    match zone {
+        ZoneId::Waste => {
+            state.waste.pop();
+        }
+        ZoneId::Reserve => {
+            state.reserve.pop();
+            if let Some(top) = state.reserve.last_mut() {
+                top.face_up = true;
+            }
+        }
+        ZoneId::Tableau(col) => {
+            state.tableau[col].pop();
+            if let Some(top) = state.tableau[col].last_mut() {
+                top.face_up = true;
+            }
+        }
+        _ => {}
+    }
+}
+
+fn auto_fill_empty_tableau(state: &mut GameState) {
+    if state.reserve.is_empty() {
+        return;
+    }
+    for i in 0..4 {
+        if state.tableau[i].is_empty() && !state.reserve.is_empty() {
+            let mut card = state.reserve.pop().unwrap();
+            card.face_up = true;
+            state.tableau[i].push(card);
+            if let Some(top) = state.reserve.last_mut() {
+                top.face_up = true;
+            }
+        }
+    }
+}
+
+// ---- Public move functions ----
+
+pub fn draw_from_stock(state: &GameState) -> Option<GameState> {
+    if state.stock.is_empty() {
+        return None;
+    }
+    let mut s = clone_state(state);
+    let count = s.draw_count as usize;
+    let draw_n = count.min(s.stock.len());
+    let start = s.stock.len() - draw_n;
+    let mut drawn: Vec<Card> = s.stock.drain(start..).collect();
+    drawn.iter_mut().for_each(|c| c.face_up = true);
+    drawn.reverse();
+    s.waste.extend(drawn);
+    s.moves += 1;
+    Some(s)
+}
+
+pub fn redeal_stock(state: &GameState) -> Option<GameState> {
+    if !state.stock.is_empty() || state.waste.is_empty() {
+        return None;
+    }
+    let mut s = clone_state(state);
+    let mut new_stock: Vec<Card> = s.waste.drain(..).collect();
+    new_stock.reverse();
+    new_stock.iter_mut().for_each(|c| c.face_up = false);
+    s.stock = new_stock;
+    s.moves += 1;
+    Some(s)
+}
+
+pub fn move_to_foundation(
+    state: &GameState,
+    source_zone: ZoneId,
+    foundation_index: usize,
+) -> Option<GameState> {
+    let card = top_card_of(state, source_zone)?.clone();
+    let pile = &state.foundations[foundation_index];
+    let expected_suit = state.foundation_suits[foundation_index];
+    if !can_place_on_foundation(&card, pile, state.base_rank, expected_suit) {
+        return None;
+    }
+    let mut s = clone_state(state);
+    remove_top_card(&mut s, source_zone);
+    let mut card = card;
+    card.face_up = true;
+    s.foundations[foundation_index].push(card);
+    s.moves += 1;
+    auto_fill_empty_tableau(&mut s);
+    s.won = check_win(&s);
+    Some(s)
+}
+
+pub fn move_tableau_to_tableau(
+    state: &GameState,
+    from_col: usize,
+    from_index: usize,
+    to_col: usize,
+) -> Option<GameState> {
+    let from = &state.tableau[from_col];
+    if from_index >= from.len() || !from[from_index].face_up {
+        return None;
+    }
+    let bottom_moving = &from[from_index];
+    if !can_place_on_tableau(bottom_moving, &state.tableau[to_col]) {
+        return None;
+    }
+    let mut s = clone_state(state);
+    let moving: Vec<Card> = s.tableau[from_col].drain(from_index..).collect();
+    if let Some(top) = s.tableau[from_col].last_mut() {
+        top.face_up = true;
+    }
+    s.tableau[to_col].extend(moving);
+    s.moves += 1;
+    auto_fill_empty_tableau(&mut s);
+    Some(s)
+}
+
+pub fn move_to_tableau(
+    state: &GameState,
+    source_zone: ZoneId,
+    to_col: usize,
+) -> Option<GameState> {
+    let card = top_card_of(state, source_zone)?.clone();
+    if !can_place_on_tableau(&card, &state.tableau[to_col]) {
+        return None;
+    }
+    let mut s = clone_state(state);
+    remove_top_card(&mut s, source_zone);
+    let mut card = card;
+    card.face_up = true;
+    s.tableau[to_col].push(card);
+    s.moves += 1;
+    auto_fill_empty_tableau(&mut s);
+    Some(s)
+}
+
+pub fn auto_move_to_foundation(state: &GameState, source_zone: ZoneId) -> Option<GameState> {
+    for i in 0..4 {
+        if let Some(result) = move_to_foundation(state, source_zone, i) {
+            return Some(result);
+        }
+    }
+    None
+}
+
+pub fn check_win(state: &GameState) -> bool {
+    state.foundations.iter().map(|p| p.len()).sum::<usize>() == 52
+}
+
 // ---- Tests ----
 
 #[cfg(test)]
@@ -351,5 +514,267 @@ mod tests {
     fn first_face_up_index_returns_len_when_no_face_up() {
         let col = vec![make_card(5, Suit::Hearts, false)];
         assert_eq!(first_face_up_index(&col), 1);
+    }
+
+    // ---- drawFromStock ----
+    #[test]
+    fn draw_from_stock_returns_none_when_empty() {
+        assert!(draw_from_stock(&make_state(|_| {})).is_none());
+    }
+
+    #[test]
+    fn draw_from_stock_draws_up_to_draw_count() {
+        let s = make_state(|s| {
+            s.stock = vec![
+                make_card(1, Suit::Hearts, false),
+                make_card(2, Suit::Clubs, false),
+                make_card(3, Suit::Diamonds, false),
+            ];
+            s.draw_count = 3;
+        });
+        let next = draw_from_stock(&s).unwrap();
+        assert_eq!(next.waste.len(), 3);
+        assert_eq!(next.stock.len(), 0);
+    }
+
+    #[test]
+    fn draw_from_stock_draws_fewer_when_stock_smaller() {
+        let s = make_state(|s| {
+            s.stock = vec![make_card(1, Suit::Hearts, false)];
+            s.draw_count = 3;
+        });
+        let next = draw_from_stock(&s).unwrap();
+        assert_eq!(next.waste.len(), 1);
+    }
+
+    #[test]
+    fn draw_from_stock_increments_move_count() {
+        let s = make_state(|s| s.stock = vec![make_card(1, Suit::Hearts, false)]);
+        assert_eq!(draw_from_stock(&s).unwrap().moves, 1);
+    }
+
+    #[test]
+    fn draw_from_stock_drawn_cards_are_face_up() {
+        let s = make_state(|s| {
+            s.stock = vec![make_card(1, Suit::Hearts, false)];
+            s.draw_count = 1;
+        });
+        assert!(draw_from_stock(&s).unwrap().waste[0].face_up);
+    }
+
+    // ---- redealStock ----
+    #[test]
+    fn redeal_stock_returns_none_when_stock_not_empty() {
+        let s = make_state(|s| {
+            s.stock = vec![make_card(1, Suit::Hearts, false)];
+            s.waste = vec![make_card(2, Suit::Clubs, true)];
+        });
+        assert!(redeal_stock(&s).is_none());
+    }
+
+    #[test]
+    fn redeal_stock_returns_none_when_waste_empty() {
+        assert!(redeal_stock(&make_state(|_| {})).is_none());
+    }
+
+    #[test]
+    fn redeal_stock_flips_waste_into_stock() {
+        let s = make_state(|s| {
+            s.waste = vec![
+                make_card(1, Suit::Hearts, true),
+                make_card(2, Suit::Clubs, true),
+                make_card(3, Suit::Diamonds, true),
+            ];
+        });
+        let next = redeal_stock(&s).unwrap();
+        assert_eq!(next.stock.len(), 3);
+        assert_eq!(next.waste.len(), 0);
+    }
+
+    #[test]
+    fn redeal_stock_new_stock_is_face_down() {
+        let s = make_state(|s| s.waste = vec![make_card(1, Suit::Hearts, true)]);
+        let next = redeal_stock(&s).unwrap();
+        assert!(next.stock.iter().all(|c| !c.face_up));
+    }
+
+    // ---- moveToFoundation ----
+    #[test]
+    fn move_to_foundation_moves_valid_card_from_waste() {
+        let base_card = make_card(1, Suit::Hearts, true);
+        let two_hearts = make_card(2, Suit::Hearts, true);
+        let s = make_state(|s| {
+            s.base_rank = 1;
+            s.foundations[0] = vec![base_card.clone()];
+            s.waste = vec![two_hearts];
+        });
+        let next = move_to_foundation(&s, ZoneId::Waste, 0).unwrap();
+        assert_eq!(next.foundations[0].len(), 2);
+        assert_eq!(next.waste.len(), 0);
+    }
+
+    #[test]
+    fn move_to_foundation_returns_none_for_invalid_move() {
+        let s = make_state(|s| s.waste = vec![make_card(3, Suit::Hearts, true)]);
+        assert!(move_to_foundation(&s, ZoneId::Waste, 0).is_none());
+    }
+
+    // ---- moveTableauToTableau ----
+    #[test]
+    fn move_tableau_to_tableau_moves_valid_card() {
+        let red_q = make_card(12, Suit::Hearts, true);
+        let black_j = make_card(11, Suit::Clubs, true);
+        let s = make_state(|s| {
+            s.tableau[0] = vec![red_q.clone()];
+            s.tableau[1] = vec![black_j];
+        });
+        let next = move_tableau_to_tableau(&s, 1, 0, 0).unwrap();
+        assert_eq!(next.tableau[0].len(), 2);
+        assert_eq!(next.tableau[1].len(), 0);
+    }
+
+    #[test]
+    fn move_tableau_to_tableau_returns_none_for_invalid_move() {
+        let red_q = make_card(12, Suit::Hearts, true);
+        let red_j = make_card(11, Suit::Diamonds, true);
+        let s = make_state(|s| {
+            s.tableau[0] = vec![red_q];
+            s.tableau[1] = vec![red_j];
+        });
+        assert!(move_tableau_to_tableau(&s, 1, 0, 0).is_none());
+    }
+
+    #[test]
+    fn move_tableau_to_tableau_moves_multi_card_sequence() {
+        let red_q = make_card(12, Suit::Hearts, true);
+        let black_j = make_card(11, Suit::Clubs, true);
+        let red_ten = make_card(10, Suit::Diamonds, true);
+        let s = make_state(|s| {
+            s.tableau[0] = vec![red_q];
+            s.tableau[1] = vec![black_j, red_ten];
+        });
+        let next = move_tableau_to_tableau(&s, 1, 0, 0).unwrap();
+        assert_eq!(next.tableau[0].len(), 3);
+        assert_eq!(next.tableau[1].len(), 0);
+    }
+
+    // ---- moveToTableau ----
+    #[test]
+    fn move_to_tableau_moves_waste_to_valid_column() {
+        let red_q = make_card(12, Suit::Hearts, true);
+        let black_j = make_card(11, Suit::Clubs, true);
+        let s = make_state(|s| {
+            s.tableau[0] = vec![red_q];
+            s.waste = vec![black_j];
+        });
+        let next = move_to_tableau(&s, ZoneId::Waste, 0).unwrap();
+        assert_eq!(next.tableau[0].len(), 2);
+        assert_eq!(next.waste.len(), 0);
+    }
+
+    #[test]
+    fn move_to_tableau_returns_none_for_invalid_move() {
+        let red_q = make_card(12, Suit::Hearts, true);
+        let red_j = make_card(11, Suit::Diamonds, true);
+        let s = make_state(|s| {
+            s.tableau[0] = vec![red_q];
+            s.waste = vec![red_j];
+        });
+        assert!(move_to_tableau(&s, ZoneId::Waste, 0).is_none());
+    }
+
+    // ---- autoMoveToFoundation ----
+    #[test]
+    fn auto_move_to_foundation_moves_to_correct_foundation() {
+        let base_card = make_card(1, Suit::Hearts, true);
+        let two_hearts = make_card(2, Suit::Hearts, true);
+        let s = make_state(|s| {
+            s.base_rank = 1;
+            s.foundations[0] = vec![base_card];
+            s.waste = vec![two_hearts];
+        });
+        let next = auto_move_to_foundation(&s, ZoneId::Waste).unwrap();
+        assert_eq!(next.foundations[0].len(), 2);
+    }
+
+    #[test]
+    fn auto_move_to_foundation_returns_none_if_no_foundation_accepts() {
+        let s = make_state(|s| {
+            s.base_rank = 5;
+            s.waste = vec![make_card(3, Suit::Hearts, true)];
+        });
+        assert!(auto_move_to_foundation(&s, ZoneId::Waste).is_none());
+    }
+
+    // ---- checkWin ----
+    #[test]
+    fn check_win_returns_false_if_not_all_in_foundations() {
+        let s = make_state(|s| s.foundations[0] = vec![make_card(1, Suit::Hearts, true)]);
+        assert!(!check_win(&s));
+    }
+
+    #[test]
+    fn check_win_returns_true_when_52_in_foundations() {
+        let s = make_state(|s| {
+            let build_pile = |suit: Suit| -> Vec<Card> {
+                (1u8..=13).map(|r| make_card(r, suit, true)).collect()
+            };
+            s.foundations = vec![
+                build_pile(Suit::Hearts),
+                build_pile(Suit::Diamonds),
+                build_pile(Suit::Clubs),
+                build_pile(Suit::Spades),
+            ];
+        });
+        assert!(check_win(&s));
+    }
+
+    // ---- serialize/deserialize ----
+    #[test]
+    fn serialize_deserialize_round_trips() {
+        let s = new_game(3);
+        let json = serde_json::to_string(&s).unwrap();
+        let restored: GameState = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.base_rank, s.base_rank);
+        assert_eq!(restored.stock.len(), s.stock.len());
+    }
+
+    // ---- auto-fill empty tableau from reserve ----
+    #[test]
+    fn auto_fill_fills_empty_tableau_from_reserve_after_move() {
+        let reserve_card = make_card(9, Suit::Diamonds, true);
+        let top_card = make_card(5, Suit::Hearts, true);
+        let s = make_state(|s| {
+            s.reserve = vec![reserve_card.clone()];
+            s.tableau[0] = vec![top_card];
+        });
+        let next = move_tableau_to_tableau(&s, 0, 0, 1).unwrap();
+        assert_eq!(next.tableau[0].len(), 1);
+        assert_eq!(next.tableau[0][0].id, reserve_card.id);
+    }
+
+    // ---- Stock order consistency ----
+    #[test]
+    fn stock_order_preserved_after_cycle_draw3() {
+        let mut s = new_game(3);
+        let initial_ids: Vec<_> = s.stock.iter().map(|c| c.id.clone()).collect();
+        while !s.stock.is_empty() {
+            s = draw_from_stock(&s).unwrap();
+        }
+        s = redeal_stock(&s).unwrap();
+        let final_ids: Vec<_> = s.stock.iter().map(|c| c.id.clone()).collect();
+        assert_eq!(final_ids, initial_ids);
+    }
+
+    #[test]
+    fn stock_order_preserved_after_cycle_draw1() {
+        let mut s = new_game(1);
+        let initial_ids: Vec<_> = s.stock.iter().map(|c| c.id.clone()).collect();
+        while !s.stock.is_empty() {
+            s = draw_from_stock(&s).unwrap();
+        }
+        s = redeal_stock(&s).unwrap();
+        let final_ids: Vec<_> = s.stock.iter().map(|c| c.id.clone()).collect();
+        assert_eq!(final_ids, initial_ids);
     }
 }
