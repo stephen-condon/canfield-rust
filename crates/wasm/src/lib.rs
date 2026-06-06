@@ -68,6 +68,6 @@ pub fn check_win(state_json: &str) -> bool {
 #[wasm_bindgen]
 pub fn first_face_up_index_in_col(state_json: &str, col: usize) -> usize {
     parse_state(state_json)
-        .map(|s| engine::first_face_up_index(&s.tableau[col]))
+        .and_then(|s| s.tableau.get(col).map(|column| engine::first_face_up_index(column)))
         .unwrap_or(0)
 }
