@@ -1,0 +1,35 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #076324; font-family: sans-serif; }
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+.screen { display: none; }
+.screen.active { display: flex; flex-direction: column; }
+.playing-card {
+  width: 80px; height: 112px;
+  border-radius: 6px; background: #fff;
+  border: 1px solid #ccc; position: relative;
+  cursor: default; user-select: none;
+}
+.playing-card.face-down { background: #1a5276; }
+.card-back-pattern {
+  width: 100%; height: 100%;
+  background: repeating-linear-gradient(45deg, #154360, #154360 5px, #1a5276 5px, #1a5276 10px);
+  border-radius: 6px;
+}
+.card-corner { padding: 4px 6px; font-size: 14px; font-weight: bold; }
+.rank-red { color: #c0392b; }
+.rank-black { color: #1a1a1a; }
+.dragging { opacity: 0.5; }
+.drop-active { outline: 2px solid #f39c12; }
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: white; gap: 16px;
+}
+.hud { display: flex; gap: 16px; padding: 8px; background: rgba(0,0,0,0.3); color: white; }
+.hud-stat { font-size: 14px; }
+.board { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.zone { min-width: 80px; min-height: 112px; border: 1px dashed rgba(255,255,255,0.3); border-radius: 6px; }
+.foundations { display: flex; gap: 8px; }
+.tableau { display: flex; gap: 8px; }
+.stock-area { display: flex; gap: 8px; }
+button { padding: 8px 16px; cursor: pointer; border-radius: 4px; border: none; }
