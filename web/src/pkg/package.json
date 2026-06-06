@@ -1,0 +1,15 @@
+{
+  "name": "canfield-wasm",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "canfield_wasm_bg.wasm",
+    "canfield_wasm.js",
+    "canfield_wasm.d.ts"
+  ],
+  "main": "canfield_wasm.js",
+  "types": "canfield_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
