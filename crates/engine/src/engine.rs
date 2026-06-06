@@ -81,6 +81,46 @@ pub fn new_game(draw_count: u8) -> GameState {
     }
 }
 
+// ---- Rank arithmetic ----
+
+pub fn next_rank(rank: Rank) -> Rank {
+    (rank % 13) + 1
+}
+
+pub fn prev_rank(rank: Rank) -> Rank {
+    ((rank + 11) % 13) + 1
+}
+
+// ---- Validation ----
+
+pub fn can_place_on_foundation(
+    card: &Card,
+    pile: &[Card],
+    base_rank: Rank,
+    expected_suit: Suit,
+) -> bool {
+    if card.suit != expected_suit {
+        return false;
+    }
+    match pile.last() {
+        None => card.rank == base_rank,
+        Some(top) => card.rank == next_rank(top.rank),
+    }
+}
+
+pub fn can_place_on_tableau(card: &Card, column: &[Card]) -> bool {
+    match column.last() {
+        None => true,
+        Some(top) => {
+            card.suit.color() != top.suit.color() && card.rank == prev_rank(top.rank)
+        }
+    }
+}
+
+pub fn first_face_up_index(column: &[Card]) -> usize {
+    column.iter().position(|c| c.face_up).unwrap_or(column.len())
+}
+
 // ---- Tests ----
 
 #[cfg(test)]
@@ -202,5 +242,114 @@ mod tests {
             + s.foundations.iter().map(|p| p.len()).sum::<usize>()
             + s.tableau.iter().map(|c| c.len()).sum::<usize>();
         assert_eq!(total, 52);
+    }
+
+    // ---- nextRank ----
+    #[test]
+    fn next_rank_increments_normally() {
+        assert_eq!(next_rank(5), 6);
+    }
+
+    #[test]
+    fn next_rank_wraps_king_to_ace() {
+        assert_eq!(next_rank(13), 1);
+    }
+
+    // ---- prevRank ----
+    #[test]
+    fn prev_rank_decrements_normally() {
+        assert_eq!(prev_rank(5), 4);
+    }
+
+    #[test]
+    fn prev_rank_wraps_ace_to_king() {
+        assert_eq!(prev_rank(1), 13);
+    }
+
+    // ---- canPlaceOnFoundation ----
+    #[test]
+    fn foundation_accepts_base_rank_on_empty_pile() {
+        assert!(can_place_on_foundation(&make_card(7, Suit::Hearts, true), &[], 7, Suit::Hearts));
+    }
+
+    #[test]
+    fn foundation_rejects_non_base_rank_on_empty_pile() {
+        assert!(!can_place_on_foundation(&make_card(8, Suit::Hearts, true), &[], 7, Suit::Hearts));
+    }
+
+    #[test]
+    fn foundation_rejects_wrong_suit_on_empty_pile() {
+        assert!(!can_place_on_foundation(&make_card(7, Suit::Diamonds, true), &[], 7, Suit::Hearts));
+    }
+
+    #[test]
+    fn foundation_accepts_next_rank_same_suit() {
+        let pile = vec![make_card(7, Suit::Hearts, true)];
+        assert!(can_place_on_foundation(&make_card(8, Suit::Hearts, true), &pile, 7, Suit::Hearts));
+    }
+
+    #[test]
+    fn foundation_rejects_wrong_suit() {
+        let pile = vec![make_card(7, Suit::Hearts, true)];
+        assert!(!can_place_on_foundation(&make_card(8, Suit::Clubs, true), &pile, 7, Suit::Hearts));
+    }
+
+    #[test]
+    fn foundation_rejects_wrong_rank() {
+        let pile = vec![make_card(7, Suit::Hearts, true)];
+        assert!(!can_place_on_foundation(&make_card(9, Suit::Hearts, true), &pile, 7, Suit::Hearts));
+    }
+
+    #[test]
+    fn foundation_wraps_king_to_ace() {
+        let pile = vec![make_card(13, Suit::Hearts, true)];
+        assert!(can_place_on_foundation(&make_card(1, Suit::Hearts, true), &pile, 7, Suit::Hearts));
+    }
+
+    // ---- canPlaceOnTableau ----
+    #[test]
+    fn tableau_accepts_anything_on_empty_column() {
+        assert!(can_place_on_tableau(&make_card(5, Suit::Hearts, true), &[]));
+    }
+
+    #[test]
+    fn tableau_accepts_alternating_color_one_lower() {
+        let top = make_card(8, Suit::Hearts, true); // red
+        let card = make_card(7, Suit::Clubs, true); // black
+        assert!(can_place_on_tableau(&card, &[top]));
+    }
+
+    #[test]
+    fn tableau_rejects_same_color() {
+        let top = make_card(8, Suit::Hearts, true);
+        let card = make_card(7, Suit::Diamonds, true);
+        assert!(!can_place_on_tableau(&card, &[top]));
+    }
+
+    #[test]
+    fn tableau_rejects_wrong_rank() {
+        let top = make_card(8, Suit::Hearts, true);
+        let card = make_card(6, Suit::Clubs, true);
+        assert!(!can_place_on_tableau(&card, &[top]));
+    }
+
+    #[test]
+    fn tableau_wraps_ace_onto_king() {
+        let top = make_card(1, Suit::Hearts, true);  // red Ace
+        let card = make_card(13, Suit::Clubs, true); // black King
+        assert!(can_place_on_tableau(&card, &[top]));
+    }
+
+    // ---- firstFaceUpIndex ----
+    #[test]
+    fn first_face_up_index_returns_correct_index() {
+        let col = vec![make_card(5, Suit::Hearts, false), make_card(6, Suit::Clubs, true)];
+        assert_eq!(first_face_up_index(&col), 1);
+    }
+
+    #[test]
+    fn first_face_up_index_returns_len_when_no_face_up() {
+        let col = vec![make_card(5, Suit::Hearts, false)];
+        assert_eq!(first_face_up_index(&col), 1);
     }
 }
