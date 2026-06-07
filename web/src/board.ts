@@ -50,11 +50,13 @@ export function renderMainMenu(): void {
   const savedGame = api.getSavedGame()
   app().innerHTML = `
     <div id="screen-menu" class="screen active">
-      <h1>Canfield Solitaire</h1>
-      <button id="btn-new-game">New Game</button>
-      <button id="btn-resume" style="display:none">Resume Game</button>
-      <button id="btn-statistics">Statistics</button>
-      <button id="btn-preferences">Preferences</button>
+      <div class="menu-card">
+        <h1>Canfield</h1>
+        <button id="btn-new-game">New Game</button>
+        <button id="btn-resume" class="btn-secondary" style="display:none">Resume Game</button>
+        <button id="btn-statistics" class="btn-secondary">Statistics</button>
+        <button id="btn-preferences" class="btn-secondary">Preferences</button>
+      </div>
     </div>`
 
   if (savedGame) {
@@ -123,10 +125,14 @@ export function renderGameBoard(stateJson: string): void {
 
     const wasteEl = document.getElementById('waste-slot')!
     wasteEl.innerHTML = ''
-    if (state.waste.length > 0) {
-      wasteEl.appendChild(
-        createCardElement(state.waste[state.waste.length - 1], { draggable: true }),
-      )
+    const fanCount = Math.min(3, state.waste.length)
+    const fanStart = state.waste.length - fanCount
+    for (let i = fanStart; i < state.waste.length; i++) {
+      const isTop = i === state.waste.length - 1
+      const cardEl = createCardElement(state.waste[i], { draggable: isTop })
+      cardEl.style.position = 'absolute'
+      cardEl.style.left = `${(i - fanStart) * 24}px`
+      wasteEl.appendChild(cardEl)
     }
 
     document.getElementById('hud-moves')!.textContent = String(state.moves)
@@ -170,23 +176,18 @@ export function renderGameBoard(stateJson: string): void {
   app().innerHTML = `
     <div id="screen-game" class="screen active">
       <div class="hud">
-        <span class="hud-stat">Moves: <span id="hud-moves">0</span></span>
-        <span class="hud-stat">Time: <span id="hud-time">0:00</span></span>
+        <span class="hud-stat">Moves <span id="hud-moves">0</span></span>
+        <span class="hud-stat">Time <span id="hud-time">0:00</span></span>
+        <span class="hud-spacer"></span>
         <button id="btn-surrender">Surrender</button>
         <button class="btn-secondary" id="btn-menu">Menu</button>
       </div>
       <div class="board">
-        <div id="zone-reserve" class="zone reserve-slot"></div>
-        <div class="foundations">
-          ${[0, 1, 2, 3].map((i) => `<div id="zone-foundation-${i}" class="zone foundation-slot" data-foundation="${i}"></div>`).join('')}
-        </div>
-        <div class="tableau">
-          ${[0, 1, 2, 3].map((i) => `<div id="zone-tableau-${i}" class="zone tableau-col" data-col="${i}" style="position:relative;min-height:200px"></div>`).join('')}
-        </div>
-        <div class="stock-area">
-          <div id="zone-stock" class="zone stock-slot"></div>
-          <div id="waste-slot" class="zone waste-slot"></div>
-        </div>
+        <div id="zone-reserve" class="zone reserve-slot" style="grid-column:1;grid-row:1"></div>
+        <div id="zone-stock" class="zone stock-slot" style="grid-column:2;grid-row:1"></div>
+        <div id="waste-slot" class="zone waste-slot" style="grid-column:3;grid-row:1"></div>
+        ${[0, 1, 2, 3].map((i) => `<div id="zone-foundation-${i}" class="zone foundation-slot" data-foundation="${i}" style="grid-column:${5 + i};grid-row:1"></div>`).join('')}
+        ${[0, 1, 2, 3].map((i) => `<div id="zone-tableau-${i}" class="zone tableau-col" data-col="${i}" style="grid-column:${5 + i};grid-row:2;position:relative"></div>`).join('')}
       </div>
       <div id="overlay-surrender" style="display:none" class="overlay">
         <p>Surrender this game?</p>
@@ -304,13 +305,15 @@ function renderStatistics(): void {
 
   app().innerHTML = `
     <div id="screen-stats" class="screen active">
-      <h2>Statistics</h2>
-      <div class="stat-value">Games Played: <span id="stat-played"></span></div>
-      <div class="stat-value">Wins: <span id="stat-wins"></span></div>
-      <div class="stat-value">Losses: <span id="stat-losses"></span></div>
-      <div class="stat-value">Win %: <span id="stat-pct"></span></div>
-      <button id="btn-reset-stats">Reset Statistics</button>
-      <button id="btn-back-stats">Back</button>
+      <div class="menu-card">
+        <h2>Statistics</h2>
+        <div class="stat-value">Games Played <span id="stat-played"></span></div>
+        <div class="stat-value">Wins <span id="stat-wins"></span></div>
+        <div class="stat-value">Losses <span id="stat-losses"></span></div>
+        <div class="stat-value">Win % <span id="stat-pct"></span></div>
+        <button id="btn-reset-stats">Reset Statistics</button>
+        <button id="btn-back-stats">Back</button>
+      </div>
     </div>`
 
   document.getElementById('stat-played')!.textContent = String(stats.gamesPlayed)
@@ -331,16 +334,18 @@ function renderPreferences(): void {
   const prefs = api.getPreferences()
   app().innerHTML = `
     <div id="screen-prefs" class="screen active">
-      <h2>Preferences</h2>
-      <label>
-        Draw Count:
-        <select id="pref-draw-count">
-          <option value="1">Draw 1</option>
-          <option value="3">Draw 3</option>
-        </select>
-      </label>
-      <button id="btn-save-prefs">Save</button>
-      <button id="btn-back-prefs">Back</button>
+      <div class="menu-card">
+        <h2>Preferences</h2>
+        <label>
+          Draw Count:
+          <select id="pref-draw-count">
+            <option value="1">Draw 1</option>
+            <option value="3">Draw 3</option>
+          </select>
+        </label>
+        <button id="btn-save-prefs">Save</button>
+        <button id="btn-back-prefs" class="btn-secondary">Back</button>
+      </div>
     </div>`
 
   const select = document.getElementById('pref-draw-count') as HTMLSelectElement

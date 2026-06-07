@@ -49,10 +49,22 @@ export function createCardElement(card: Card, opts: CardElementOptions = {}): HT
   const colorClass = isRed(card.suit) ? 'rank-red' : 'rank-black'
   el.classList.add(colorClass)
 
+  const label = `${rankLabel(card.rank)}${suitSymbol(card.suit)}`
+
+  const center = document.createElement('div')
+  center.className = 'card-suit-center'
+  center.textContent = suitSymbol(card.suit)
+  el.appendChild(center)
+
   const corner = document.createElement('div')
   corner.className = 'card-corner'
-  corner.textContent = `${rankLabel(card.rank)}${suitSymbol(card.suit)}`
+  corner.textContent = label
   el.appendChild(corner)
+
+  const cornerBottom = document.createElement('div')
+  cornerBottom.className = 'card-corner card-corner-bottom'
+  cornerBottom.textContent = label
+  el.appendChild(cornerBottom)
 
   if (opts.draggable) {
     el.addEventListener('dragstart', (e) => {

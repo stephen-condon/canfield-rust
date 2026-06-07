@@ -94,6 +94,53 @@ describe('surrender flow', () => {
   })
 })
 
+describe('waste fan', () => {
+  const stateWithWaste = (n: number): string => {
+    const waste = Array.from({ length: n }, (_, i) => ({
+      id: `w${i}`,
+      suit: 'hearts',
+      rank: i + 1,
+      faceUp: true,
+    }))
+    return JSON.stringify({
+      baseRank: 1,
+      foundationSuits: ['hearts', 'diamonds', 'clubs', 'spades'],
+      foundations: [[], [], [], []],
+      tableau: [[], [], [], []],
+      reserve: [],
+      stock: [],
+      waste,
+      drawCount: 3,
+      moves: 0,
+      elapsedMs: 0,
+      won: false,
+    })
+  }
+
+  it('fans up to 3 waste cards with only the top one draggable', () => {
+    renderGameBoard(stateWithWaste(3))
+    const cards = document.querySelectorAll('#waste-slot .playing-card')
+    expect(cards.length).toBe(3)
+    expect((cards[0] as HTMLElement).draggable).toBe(false)
+    expect((cards[1] as HTMLElement).draggable).toBe(false)
+    expect((cards[2] as HTMLElement).draggable).toBe(true)
+  })
+
+  it('shows only the last 3 cards when the waste pile is deeper', () => {
+    renderGameBoard(stateWithWaste(5))
+    const cards = document.querySelectorAll('#waste-slot .playing-card')
+    expect(cards.length).toBe(3)
+    expect(cards[2].getAttribute('data-card-id')).toBe('w4')
+  })
+
+  it('renders a single draggable card in draw-1-style waste', () => {
+    renderGameBoard(stateWithWaste(1))
+    const cards = document.querySelectorAll('#waste-slot .playing-card')
+    expect(cards.length).toBe(1)
+    expect((cards[0] as HTMLElement).draggable).toBe(true)
+  })
+})
+
 describe('main menu', () => {
   it('shows New Game, Statistics, Preferences buttons', () => {
     renderMainMenu()
