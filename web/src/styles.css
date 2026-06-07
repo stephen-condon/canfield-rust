@@ -80,6 +80,7 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.12);
   box-shadow: var(--shadow-card);
   position: relative;
+  isolation: isolate;
   cursor: default;
   user-select: none;
   overflow: hidden;
@@ -242,9 +243,8 @@ body {
 .tableau-col {
   min-height: 380px;
   background: transparent;
-  border-style: solid;
-  border-color: var(--gold-faint);
-  border-width: 1px;
+  border: none;
+  box-shadow: none;
 }
 
 /* ---------------------------------------------------------------
