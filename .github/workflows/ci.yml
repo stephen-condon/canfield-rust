@@ -52,23 +52,40 @@ jobs:
       - name: Install wasm-pack
         uses: jetli/wasm-pack-action@v0.4.0
 
-      # Smoke test: confirm the wasm crate compiles for wasm32 and survives
-      # wasm-bindgen + wasm-opt. We do NOT byte-compare against the committed
-      # web/src/pkg/ — wasm-pack output is not reproducible across machines, so
-      # a diff here is expected noise. Keeping committed artifacts fresh is a
-      # local Definition-of-Done step (see CLAUDE.md), enforced where the build
-      # is reproducible: on the author's machine.
+      # Build the wasm package from current source and publish it as an
+      # artifact. The web and e2e jobs consume this instead of the committed
+      # web/src/pkg/, so the production bundle and E2E tests always run against
+      # CI-built artifacts — never a binary a contributor checked in. This
+      # closes the supply-chain gap (a tampered/stale committed binary cannot
+      # reach the build) and catches stale-logic drift the old byte-diff could
+      # not. The committed web/src/pkg/ remains for local dev convenience;
+      # keeping it fresh is a local Definition-of-Done step (see CLAUDE.md).
       - name: Build WASM package
         run: wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg
 
+      - name: Upload WASM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: web/src/pkg
+
   web:
     name: Web (tsc, unit tests, build)
+    needs: wasm-build
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
+
+      # Replace the committed pkg/ with the package built from source in CI,
+      # so tsc and the production bundle run against current-source wasm.
+      - name: Download CI-built WASM package
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: web/src/pkg
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -91,12 +108,20 @@ jobs:
 
   e2e:
     name: Web E2E (Playwright)
+    needs: wasm-build
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
+
+      # Run E2E against the CI-built wasm, not the committed binary.
+      - name: Download CI-built WASM package
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: web/src/pkg
 
       - name: Setup Node
         uses: actions/setup-node@v4
