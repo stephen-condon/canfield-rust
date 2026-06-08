@@ -71,7 +71,7 @@ wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg
 
 ```bash
 # From web/:
-npm test                   # Vitest unit tests (28 tests, jsdom, run once)
+npm test                   # Vitest unit tests (31 tests, jsdom, run once)
 npm run test:watch         # Vitest in watch mode
 npm run test:e2e           # Playwright E2E tests (4 tests, launches dev server)
 npm run build              # tsc + Vite production build → dist/
@@ -84,10 +84,33 @@ npm run preview            # Serve the production build locally
 | Suite | Command | Count |
 |---|---|---|
 | Rust engine unit tests | `cargo test -p canfield-engine` | 52 |
-| Web unit tests (Vitest/jsdom) | `cd web && npm test` | 28 |
+| Web unit tests (Vitest/jsdom) | `cd web && npm test` | 31 |
 | E2E tests (Playwright/Chromium) | `cd web && npm run test:e2e` | 4 |
 
 All tests must pass before committing. Web unit tests are isolated: they mock the WASM module and the `api` localStorage adapter — no real WASM execution or browser storage in unit tests.
+
+## Continuous Integration
+
+Every pull request and push to `main` runs `.github/workflows/ci.yml`:
+
+| Job | Checks |
+|---|---|
+| **Rust** | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test -p canfield-engine` |
+| **WASM build** | `wasm-pack build` from source; uploads the package as an artifact |
+| **Web** | downloads that artifact, then `tsc --noEmit`, `npm test`, `npm run build` |
+| **E2E** | downloads that artifact, then Playwright |
+
+The web and E2E jobs run against **WASM built from source in CI**, not the committed `web/src/pkg/` binary, so the build can never ship a stale or tampered artifact. CodeQL analysis runs separately. `main` requires all four jobs to pass and squash-merges only.
+
+### Pre-commit hook
+
+A path-aware hook runs the fast CI gates locally before each commit. Install it once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It runs the Rust gates (`fmt`, `clippy`, `cargo test`) when `crates/**` is staged and the web gates (`tsc`, `npm test`) when `web/**` is staged. Slow steps (wasm/production build, E2E) are left to CI. Bypass with `git commit --no-verify`.
 
 ## Game Rules Implemented
 
