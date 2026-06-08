@@ -111,14 +111,15 @@ pub fn can_place_on_foundation(
 pub fn can_place_on_tableau(card: &Card, column: &[Card]) -> bool {
     match column.last() {
         None => true,
-        Some(top) => {
-            card.suit.color() != top.suit.color() && card.rank == prev_rank(top.rank)
-        }
+        Some(top) => card.suit.color() != top.suit.color() && card.rank == prev_rank(top.rank),
     }
 }
 
 pub fn first_face_up_index(column: &[Card]) -> usize {
-    column.iter().position(|c| c.face_up).unwrap_or(column.len())
+    column
+        .iter()
+        .position(|c| c.face_up)
+        .unwrap_or(column.len())
 }
 
 // ---- Private helpers ----
@@ -252,11 +253,7 @@ pub fn move_tableau_to_tableau(
     Some(s)
 }
 
-pub fn move_to_tableau(
-    state: &GameState,
-    source_zone: ZoneId,
-    to_col: usize,
-) -> Option<GameState> {
+pub fn move_to_tableau(state: &GameState, source_zone: ZoneId, to_col: usize) -> Option<GameState> {
     let card = top_card_of(state, source_zone)?.clone();
     if !can_place_on_tableau(&card, &state.tableau[to_col]) {
         return None;
@@ -432,41 +429,76 @@ mod tests {
     // ---- canPlaceOnFoundation ----
     #[test]
     fn foundation_accepts_base_rank_on_empty_pile() {
-        assert!(can_place_on_foundation(&make_card(7, Suit::Hearts, true), &[], 7, Suit::Hearts));
+        assert!(can_place_on_foundation(
+            &make_card(7, Suit::Hearts, true),
+            &[],
+            7,
+            Suit::Hearts
+        ));
     }
 
     #[test]
     fn foundation_rejects_non_base_rank_on_empty_pile() {
-        assert!(!can_place_on_foundation(&make_card(8, Suit::Hearts, true), &[], 7, Suit::Hearts));
+        assert!(!can_place_on_foundation(
+            &make_card(8, Suit::Hearts, true),
+            &[],
+            7,
+            Suit::Hearts
+        ));
     }
 
     #[test]
     fn foundation_rejects_wrong_suit_on_empty_pile() {
-        assert!(!can_place_on_foundation(&make_card(7, Suit::Diamonds, true), &[], 7, Suit::Hearts));
+        assert!(!can_place_on_foundation(
+            &make_card(7, Suit::Diamonds, true),
+            &[],
+            7,
+            Suit::Hearts
+        ));
     }
 
     #[test]
     fn foundation_accepts_next_rank_same_suit() {
         let pile = vec![make_card(7, Suit::Hearts, true)];
-        assert!(can_place_on_foundation(&make_card(8, Suit::Hearts, true), &pile, 7, Suit::Hearts));
+        assert!(can_place_on_foundation(
+            &make_card(8, Suit::Hearts, true),
+            &pile,
+            7,
+            Suit::Hearts
+        ));
     }
 
     #[test]
     fn foundation_rejects_wrong_suit() {
         let pile = vec![make_card(7, Suit::Hearts, true)];
-        assert!(!can_place_on_foundation(&make_card(8, Suit::Clubs, true), &pile, 7, Suit::Hearts));
+        assert!(!can_place_on_foundation(
+            &make_card(8, Suit::Clubs, true),
+            &pile,
+            7,
+            Suit::Hearts
+        ));
     }
 
     #[test]
     fn foundation_rejects_wrong_rank() {
         let pile = vec![make_card(7, Suit::Hearts, true)];
-        assert!(!can_place_on_foundation(&make_card(9, Suit::Hearts, true), &pile, 7, Suit::Hearts));
+        assert!(!can_place_on_foundation(
+            &make_card(9, Suit::Hearts, true),
+            &pile,
+            7,
+            Suit::Hearts
+        ));
     }
 
     #[test]
     fn foundation_wraps_king_to_ace() {
         let pile = vec![make_card(13, Suit::Hearts, true)];
-        assert!(can_place_on_foundation(&make_card(1, Suit::Hearts, true), &pile, 7, Suit::Hearts));
+        assert!(can_place_on_foundation(
+            &make_card(1, Suit::Hearts, true),
+            &pile,
+            7,
+            Suit::Hearts
+        ));
     }
 
     // ---- canPlaceOnTableau ----
@@ -498,7 +530,7 @@ mod tests {
 
     #[test]
     fn tableau_wraps_ace_onto_king() {
-        let top = make_card(1, Suit::Hearts, true);  // red Ace
+        let top = make_card(1, Suit::Hearts, true); // red Ace
         let card = make_card(13, Suit::Clubs, true); // black King
         assert!(can_place_on_tableau(&card, &[top]));
     }
@@ -506,7 +538,10 @@ mod tests {
     // ---- firstFaceUpIndex ----
     #[test]
     fn first_face_up_index_returns_correct_index() {
-        let col = vec![make_card(5, Suit::Hearts, false), make_card(6, Suit::Clubs, true)];
+        let col = vec![
+            make_card(5, Suit::Hearts, false),
+            make_card(6, Suit::Clubs, true),
+        ];
         assert_eq!(first_face_up_index(&col), 1);
     }
 
