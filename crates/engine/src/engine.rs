@@ -28,7 +28,7 @@ pub fn build_deck() -> Vec<Card> {
     deck
 }
 
-pub fn shuffle_deck(deck: &mut Vec<Card>) {
+pub fn shuffle_deck(deck: &mut [Card]) {
     let mut rng = rand::thread_rng();
     deck.shuffle(&mut rng);
 }
@@ -127,7 +127,7 @@ fn clone_state(state: &GameState) -> GameState {
     state.clone()
 }
 
-fn top_card_of<'a>(state: &'a GameState, zone: ZoneId) -> Option<&'a Card> {
+fn top_card_of(state: &GameState, zone: ZoneId) -> Option<&Card> {
     match zone {
         ZoneId::Waste => state.waste.last(),
         ZoneId::Reserve => state.reserve.last(),
