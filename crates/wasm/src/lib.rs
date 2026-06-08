@@ -27,7 +27,11 @@ pub fn redeal_stock(state_json: &str) -> Option<String> {
 }
 
 #[wasm_bindgen]
-pub fn move_to_foundation(state_json: &str, source_zone: &str, foundation_index: usize) -> Option<String> {
+pub fn move_to_foundation(
+    state_json: &str,
+    source_zone: &str,
+    foundation_index: usize,
+) -> Option<String> {
     let state = parse_state(state_json)?;
     let zone = ZoneId::parse(source_zone)?;
     engine::move_to_foundation(&state, zone, foundation_index).map(to_json)
@@ -68,6 +72,10 @@ pub fn check_win(state_json: &str) -> bool {
 #[wasm_bindgen]
 pub fn first_face_up_index_in_col(state_json: &str, col: usize) -> usize {
     parse_state(state_json)
-        .and_then(|s| s.tableau.get(col).map(|column| engine::first_face_up_index(column)))
+        .and_then(|s| {
+            s.tableau
+                .get(col)
+                .map(|column| engine::first_face_up_index(column))
+        })
         .unwrap_or(0)
 }
