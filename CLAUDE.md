@@ -32,7 +32,7 @@ npm run build              # Production build → web/dist/
 npm run dev                # Dev server at http://localhost:5173
 npx tsc --noEmit           # TypeScript type-check only
 
-# One-time: install the local pre-commit hook (runs the fast CI gates)
+# Hooks install automatically via `npm install` (web/); manual fallback:
 git config core.hooksPath .githooks
 ```
 
@@ -119,7 +119,7 @@ CodeQL analysis (actions / JavaScript-TypeScript / Rust) also runs as a separate
 
 ### Pre-commit hook
 
-`.githooks/pre-commit` runs the fast CI gates locally so you don't push a commit that fails CI. Install once per clone:
+`.githooks/pre-commit` runs the fast CI gates locally so you don't push a commit that fails CI. It installs automatically: running `npm install` in `web/` triggers the `prepare` script (`scripts/setup-hooks.mjs`), which sets `core.hooksPath` to `.githooks`. The script no-ops safely when there is no git work tree (e.g. CI tarball installs). Manual fallback:
 
 ```bash
 git config core.hooksPath .githooks

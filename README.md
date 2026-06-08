@@ -104,7 +104,7 @@ The web and E2E jobs run against **WASM built from source in CI**, not the commi
 
 ### Pre-commit hook
 
-A path-aware hook runs the fast CI gates locally before each commit. Install it once per clone:
+A path-aware hook runs the fast CI gates locally before each commit. It installs automatically when you run `npm install` in `web/` (via the `prepare` script). To install it manually:
 
 ```bash
 git config core.hooksPath .githooks
