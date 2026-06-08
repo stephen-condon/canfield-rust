@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook: runs the fast, deterministic CI gates locally so you don't
+# push a commit that fails CI. It is path-aware — only the checks relevant to
+# the staged files run.
+#
+# Install once (from the repo root):
+#   git config core.hooksPath .githooks
+#
+# Bypass for a single commit (use sparingly):
+#   git commit --no-verify
+#
+# What it intentionally does NOT run (too slow for a commit; left to CI):
+#   wasm-pack build, npm run build, Playwright E2E, CodeQL.
+
+set -uo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root" || exit 1
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+changed() { echo "$staged" | grep -qE "$1"; }
+
+fail=0
+run() { # run <label> <command...>
+  local label=$1; shift
+  echo "▶ $label"
+  if ! "$@"; then
+    echo "✖ $label failed"
+    fail=1
+  fi
+}
+
+if changed '^crates/'; then
+  run "cargo fmt --check"   cargo fmt --all -- --check
+  run "cargo clippy"        cargo clippy --workspace --all-targets -- -D warnings
+  run "cargo test (engine)" cargo test -p canfield-engine
+fi
+
+if changed '^crates/(engine|wasm)/'; then
+  echo "⚠ engine/wasm changed — rebuild and commit web/src/pkg/ if you haven't:"
+  echo "    wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg"
+  echo "  (CI builds wasm from source, so this is hygiene for local dev, not a CI gate.)"
+fi
+
+if changed '^web/'; then
+  run "tsc --noEmit" bash -c 'cd web && npx tsc --noEmit'
+  run "npm test"     bash -c 'cd web && npm test'
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo
+  echo "✖ pre-commit checks failed. Fix the above, or bypass with: git commit --no-verify"
+  exit 1
+fi
+
+echo "✓ pre-commit checks passed"
+exit 0
