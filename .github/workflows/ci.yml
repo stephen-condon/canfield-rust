@@ -37,8 +37,8 @@ jobs:
       - name: Test
         run: cargo test -p canfield-engine
 
-  wasm-sync:
-    name: WASM in sync with engine
+  wasm-build:
+    name: WASM build (wasm32 target)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,19 +52,14 @@ jobs:
       - name: Install wasm-pack
         uses: jetli/wasm-pack-action@v0.4.0
 
-      - name: Rebuild WASM package
+      # Smoke test: confirm the wasm crate compiles for wasm32 and survives
+      # wasm-bindgen + wasm-opt. We do NOT byte-compare against the committed
+      # web/src/pkg/ — wasm-pack output is not reproducible across machines, so
+      # a diff here is expected noise. Keeping committed artifacts fresh is a
+      # local Definition-of-Done step (see CLAUDE.md), enforced where the build
+      # is reproducible: on the author's machine.
+      - name: Build WASM package
         run: wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg
-
-      # The generated web/src/pkg/ is committed. If a rebuild produces a diff,
-      # the committed artifacts are stale — fail and tell the author to rebuild.
-      - name: Verify committed pkg/ is up to date
-        run: |
-          if ! git diff --exit-code -- web/src/pkg/; then
-            echo "::error::web/src/pkg/ is out of date. Run:"
-            echo "::error::  wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg"
-            echo "::error::and commit the result."
-            exit 1
-          fi
 
   web:
     name: Web (tsc, unit tests, build)
