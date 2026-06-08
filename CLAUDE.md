@@ -6,6 +6,15 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 Use **American English** throughout all code, comments, and documentation (e.g., "behavior" not "behaviour", "serialized" not "serialised", "color" not "colour").
 
+## Documentation
+
+**Any meaningful change must update the docs as part of the same change — not as a follow-up.** "Meaningful" means anything that alters behavior, architecture, commands, the build/CI pipeline, test counts, or developer workflow. Update the relevant file(s):
+
+- **`README.md`** — user- and contributor-facing: setup, commands, architecture overview, game rules, testing, CI.
+- **`CLAUDE.md`** (this file) — guidance for working in the repo: design constraints, invariants, workflow, Definition of Done.
+
+If a change makes a statement in either file inaccurate (e.g., a test count, a command, a job name), fix it in the same commit. A PR that changes behavior without the corresponding doc update is incomplete.
+
 ## Commands
 
 ```bash
@@ -16,12 +25,15 @@ wasm-pack build crates/wasm --target web \
   --out-dir ../../web/src/pkg                   # Rebuild WASM after engine changes
 
 # From web/:
-npm test                   # Vitest unit tests — run once (28 tests)
+npm test                   # Vitest unit tests — run once (31 tests)
 npm run test:watch         # Vitest in watch mode
 npm run test:e2e           # Playwright E2E (4 tests, launches dev server)
 npm run build              # Production build → web/dist/
 npm run dev                # Dev server at http://localhost:5173
 npx tsc --noEmit           # TypeScript type-check only
+
+# One-time: install the local pre-commit hook (runs the fast CI gates)
+git config core.hooksPath .githooks
 ```
 
 **Important:** Any change to `crates/engine/` or `crates/wasm/` requires a `wasm-pack build` run before the web frontend will pick up the change.
@@ -88,11 +100,45 @@ Plain TypeScript + Vite. No framework. Key files:
 - **`vi.mock` hoisting**: Vitest hoists `vi.mock` calls above all variable declarations. Factory functions inside `vi.mock` cannot reference module-level `const` variables — inline all literal values directly into the factory.
 - E2E tests (`e2e/`) exercise the live dev server (real WASM + real DOM) and are not a substitute for unit coverage.
 
+## Continuous Integration
+
+CI runs on every pull request and on pushes to `main`, defined in `.github/workflows/ci.yml`. Jobs:
+
+| Job | Runs | Notes |
+|---|---|---|
+| **Rust (fmt, clippy, test)** | `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p canfield-engine` | `clippy` is `-D warnings`: any lint fails the build. |
+| **WASM build (wasm32 target)** | `wasm-pack build`, then uploads `web/src/pkg/` as the `wasm-pkg` artifact | Builds the wasm from current source. |
+| **Web (tsc, unit tests, build)** | downloads `wasm-pkg` → `tsc --noEmit`, `npm test`, `npm run build` | `needs: wasm-build`. |
+| **Web E2E (Playwright)** | downloads `wasm-pkg` → `npm run test:e2e` | `needs: wasm-build`. |
+
+CodeQL analysis (actions / JavaScript-TypeScript / Rust) also runs as a separate workflow.
+
+**WASM is built from source in CI, not trusted from the commit.** `web` and `e2e` download the `wasm-pkg` artifact and overwrite `web/src/pkg/` before building/testing, so the production bundle and E2E always run against wasm compiled from the current engine source — a stale or tampered committed binary cannot reach the build. `wasm-pack` output is **not** byte-reproducible across machines, so CI does **not** byte-compare the committed `web/src/pkg/`; keeping it fresh is a local Definition-of-Done step instead.
+
+`main` is protected by a ruleset: squash-merge only, branches must be up to date, and all four jobs above are required status checks.
+
+### Pre-commit hook
+
+`.githooks/pre-commit` runs the fast CI gates locally so you don't push a commit that fails CI. Install once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It is **path-aware** — only checks relevant to the staged files run:
+
+- staged `crates/**` → `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test -p canfield-engine` (and a reminder to rebuild `web/src/pkg/` if `engine`/`wasm` changed).
+- staged `web/**` → `npx tsc --noEmit`, `npm test`.
+
+It deliberately skips the slow jobs (`wasm-pack build`, `npm run build`, Playwright E2E, CodeQL) — those run in CI. Bypass a single commit with `git commit --no-verify`.
+
 ## Definition of Done
 
+The `.githooks/pre-commit` hook automates the fast subset of this list (steps 1, 2, 4 and the Rust lint/format gates) for the files you staged. Installing it (`git config core.hooksPath .githooks`) is the easiest way to stay in sync; the full list still applies before merging.
+
 Before every commit:
-1. `cargo test -p canfield-engine` — all Rust tests pass.
-2. `cd web && npm test` — all 28 web unit tests pass.
+1. `cargo test -p canfield-engine` — all Rust tests pass; `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` are clean (both are CI gates).
+2. `cd web && npm test` — all 31 web unit tests pass.
 3. **Ensure WASM is up to date.** If anything under `crates/engine/` or `crates/wasm/` changed, rebuild and commit the regenerated package:
    ```bash
    wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg
