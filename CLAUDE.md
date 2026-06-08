@@ -93,7 +93,12 @@ Plain TypeScript + Vite. No framework. Key files:
 Before every commit:
 1. `cargo test -p canfield-engine` — all Rust tests pass.
 2. `cd web && npm test` — all 28 web unit tests pass.
-3. If WASM-facing code changed, run `wasm-pack build` and include the updated `web/src/pkg/` files in the commit.
+3. **Ensure WASM is up to date.** If anything under `crates/engine/` or `crates/wasm/` changed, rebuild and commit the regenerated package:
+   ```bash
+   wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg
+   git diff --exit-code web/src/pkg/   # must be clean after rebuild
+   ```
+   A non-empty diff after rebuilding means stale artifacts were about to be committed — stage `web/src/pkg/` and commit it alongside the engine change. Run this check locally: `wasm-pack` output is only byte-reproducible on the same machine, so this is enforced here rather than in CI.
 4. `npx tsc --noEmit` — no TypeScript errors.
 
 Before merging:
