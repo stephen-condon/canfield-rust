@@ -571,6 +571,8 @@ jobs:
             "canfield-v${{ steps.gate.outputs.version }}-web.zip"
 ```
 
+> **Security hardening applied in the committed file** (`.github/workflows/release-publish.yml` is canonical): the `gate` step validates the version against `^[0-9]+\.[0-9]+\.[0-9]+$` and fails otherwise, and every `run:` step that uses the version receives it via `env: VERSION:` and references `"$VERSION"` (not raw `${{ }}` interpolation), to neutralize any shell-injection path from `web/package.json` content.
+
 - [ ] **Step 2: Sanity-check YAML syntax**
 
 Run: `ruby -ryaml -e "YAML.load_file('.github/workflows/release-publish.yml')" && echo OK`
