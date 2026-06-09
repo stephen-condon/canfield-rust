@@ -73,9 +73,10 @@ commit_parsers = [
   { message = "^chore", group = "Miscellaneous" },
 ]
 filter_commits = false
-tag_pattern = "v[0-9]*"
 topo_order = false
 sort_commits = "oldest"
+# No tag_pattern: this repo only ever has vX.Y.Z release tags, and a v-prefixed
+# pattern makes `--bumped-version` reject its own bare-semver output.
 
 # Bump rules. While the version is 0.x: feat AND breaking changes both bump
 # the MINOR (0.x convention), fix bumps PATCH. Once >= 1.0.0, breaking changes
