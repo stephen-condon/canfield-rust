@@ -2,31 +2,28 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a conventional-commit-driven release process: a one-button GitHub Actions workflow that opens a version-bump/changelog "release PR", and an on-merge workflow that tags the commit and publishes a GitHub Release with the web bundle attached.
+**Goal:** Add a conventional-commit-driven release process: a local `npm run release` script that opens a version-bump/changelog "release PR" (pushed with the contributor's own credentials so required CI fires), and an on-merge workflow that tags the commit and publishes a GitHub Release with the web bundle attached.
 
-**Architecture:** `git-cliff` computes the next semver from conventional commits and renders the changelog. A `workflow_dispatch` *prepare* job opens a `release/vX.Y.Z` PR (bumped version in all 3 fields + `Cargo.lock` + `CHANGELOG.md`). A human squash-merges it; a *publish* job triggered by that push to `main` tags the commit and creates the Release. The git tag is the source of truth.
+**Architecture:** `git-cliff` (run via `npx git-cliff`, zero install) computes the next semver from conventional commits and renders the changelog. A local script (`web/scripts/release/prepare.mjs`, invoked by `npm run release`) opens a `release/vX.Y.Z` PR (bumped manifests + `Cargo.lock` + `CHANGELOG.md`). A human squash-merges it; a *publish* workflow triggered by that push to `main` tags the commit and creates the Release using the default `GITHUB_TOKEN`. **No repo secrets are required.** The git tag is the source of truth.
 
-**Tech Stack:** GitHub Actions, `git-cliff`, Node ESM (`.mjs`), Vitest, `gh` CLI, `wasm-pack`.
+**Tech Stack:** Node ESM (`.mjs`), `npx git-cliff`, Vitest, `gh` CLI, `cargo`, GitHub Actions, `wasm-pack`.
 
 ---
 
-## Prerequisites (one-time repo setup — document, do not script)
+## Why this shape (context for the implementer)
 
-These are configured by the human in GitHub repo settings, not by this plan's code. Task 5 documents them; call them out at handoff.
-
-1. **`RELEASE_PR_TOKEN` secret** — a fine-grained Personal Access Token (or GitHub App installation token) scoped to this repo with `Contents: read/write` and `Pull requests: read/write`. The prepare workflow uses it to push the release branch and open the PR **so the four required CI checks actually run on the PR** (a PR opened by the default `GITHUB_TOKEN` does not trigger other workflows, so it could never satisfy required checks).
-   - **Secret-free fallback** (if the user declines the PAT): leave prepare on `GITHUB_TOKEN`; after the bot opens the PR a human must **close and reopen it** to trigger the CI checks. Clunky but needs no secret. Documented in README.
-2. The publish workflow uses the default `GITHUB_TOKEN` (creating a tag + release needs only `contents: write`) — no extra secret.
+`main` requires four CI status checks. A PR opened by a GitHub Actions workflow using the default `GITHUB_TOKEN` does **not** trigger other workflows, so the required checks would never run and the release PR could never merge. Avoiding that without a human-provisioned PAT/App secret is exactly why the *prepare* step is a **local script** (pushed with the contributor's own credentials → checks fire normally). The *publish* step stays in Actions because the human squash-merge is an ordinary push to `main`, which triggers it, and creating a tag+release needs only the automatic `GITHUB_TOKEN`. Net: zero repo secrets, zero admin setup.
 
 ## File Structure
 
-- Create `cliff.toml` (repo root) — git-cliff config: commit→group mapping, bump rules (0.x-aware), changelog template.
-- Create `web/scripts/release/set-version.mjs` — pure `setVersion(version, files)` that writes a version into the two crate `Cargo.toml`s + `web/package.json`; CLI entry when run directly. Lives under `web/scripts/` to match the existing `setup-hooks.mjs` convention and keep the Vitest import inside the web root.
+- Create `cliff.toml` (repo root) — git-cliff config: commit→group mapping, bump rules (0.x-aware), changelog template. Shared by the local script and the publish workflow.
+- Create `web/scripts/release/set-version.mjs` — pure `setVersion(version, files)` + `DEFAULT_FILES`; writes a version into the two crate `Cargo.toml`s + `web/package.json`. CLI entry when run directly. Under `web/scripts/` to match `setup-hooks.mjs` and keep the Vitest import inside the web root.
 - Create `web/src/tests/set-version.test.ts` — Vitest unit test for `setVersion` against temp fixtures.
-- Create `.github/workflows/release-prepare.yml` — `workflow_dispatch` → release PR.
-- Create `.github/workflows/release-publish.yml` — push-to-`main` → tag + release.
+- Create `web/scripts/release/prepare.mjs` — the `npm run release` orchestrator: compute version, branch from `origin/main`, bump, changelog, commit, push, open PR.
+- Modify `web/package.json` — add `"release"` script.
+- Create `.github/workflows/release-publish.yml` — push-to-`main` → tag + GitHub Release.
 - Modify `README.md` — new "Releasing" section + web unit-test count.
-- Modify `CLAUDE.md` — version invariant, CI table rows, web unit-test counts.
+- Modify `CLAUDE.md` — versioning invariant, `release-publish` CI row, `npm run release` command, web unit-test counts.
 
 ---
 
@@ -89,22 +86,17 @@ features_always_bump_minor = true
 breaking_always_bump_major = false
 ```
 
-- [ ] **Step 2: Install git-cliff locally for a smoke check**
+- [ ] **Step 2: Smoke-test changelog rendering (zero install via npx)**
 
-Run: `cargo install git-cliff --locked` (or `brew install git-cliff`)
-Expected: `git-cliff` binary on PATH (`git-cliff --version` prints a version).
+Run: `npx --yes git-cliff@2 --unreleased --strip all`
+Expected: on first use npx fetches the git-cliff binary, then it renders a grouped changelog of commits since the last tag with no config/template error. There are no tags yet, so this covers all history; content is history-dependent — you only need it to render WITHOUT an error. If a config key is rejected, fix `cliff.toml` so it parses and re-run.
 
-- [ ] **Step 3: Smoke-test changelog rendering**
+- [ ] **Step 3: Smoke-test version calculation**
 
-Run: `git cliff --unreleased --strip all`
-Expected: prints a grouped changelog of commits since the last tag (no error). Content is history-dependent; the only requirement is that it renders without a config error.
+Run: `npx --yes git-cliff@2 --bumped-version`
+Expected: prints a single semver (e.g. `0.2.0` or `v0.2.0`) with no error. Exact value is history-dependent; you only need it to succeed and emit a valid `X.Y.Z`.
 
-- [ ] **Step 4: Smoke-test version calculation**
-
-Run: `git cliff --bumped-version`
-Expected: prints a single semver (e.g. `0.2.0` or `v0.2.0`) with no error. The exact value depends on commit history; you only need it to succeed and emit a valid `X.Y.Z`.
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add cliff.toml
@@ -207,12 +199,12 @@ Create `web/scripts/release/set-version.mjs`:
 // Writes a single app version into every version field that the release
 // process keeps in lockstep: both crate Cargo.toml [package] versions and
 // web/package.json. The git tag is the source of truth; this script exists so
-// the release-prepare workflow (and a human, locally) can stamp that version
-// into the repo deterministically.
+// the release flow (and a human, locally) can stamp that version into the repo
+// deterministically.
 //
 // Usage (from repo root):  node web/scripts/release/set-version.mjs 1.2.3
 //
-// Exported for unit testing: setVersion(version, files).
+// Exported for the prepare script and unit tests: setVersion(version, files).
 
 import { readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
@@ -287,117 +279,185 @@ git commit -m "feat(release): add set-version script to stamp app version into a
 
 ---
 
-## Task 3: `release-prepare.yml` workflow
+## Task 3: `prepare.mjs` local release script
 
 **Files:**
-- Create: `.github/workflows/release-prepare.yml`
+- Create: `web/scripts/release/prepare.mjs`
+- Modify: `web/package.json` (add the `release` script)
 
-- [ ] **Step 1: Create the workflow**
+- [ ] **Step 1: Create `prepare.mjs`**
 
-```yaml
-name: Release — prepare
+Create `web/scripts/release/prepare.mjs`:
 
-# Manually triggered. Computes the next version from conventional commits,
-# bumps every version field + Cargo.lock + CHANGELOG.md on a release/* branch,
-# and opens a PR. A human squash-merges that PR to ship (see release-publish).
-on:
-  workflow_dispatch:
-    inputs:
-      bump:
-        description: "Version: auto (from commits) | patch | minor | major | explicit x.y.z"
-        required: false
-        default: auto
+```js
+#!/usr/bin/env node
+//
+// Prepare a release: compute the next version from conventional commits, bump
+// every version field + Cargo.lock + CHANGELOG.md on a release/ branch, push it,
+// and open a PR. Run via `npm run release` from web/.
+//
+//   npm run release                 # auto bump from commits
+//   npm run release -- minor        # force a level (patch|minor|major)
+//   npm run release -- 1.4.0        # explicit version
+//   npm run release -- --dry-run    # show the plan, change nothing
+//   npm run release -- --yes        # skip the confirmation prompt
+//
+// The git tag is the source of truth; this script stamps the computed version
+// into the repo so the release PR is reviewable. It pushes with YOUR git
+// credentials (not a CI token) so the required CI checks run on the PR.
+//
+// Prerequisites: git, node, `gh` (authenticated), and `cargo` on PATH.
 
-permissions:
-  contents: write
-  pull-requests: write
+import { execFileSync } from 'node:child_process'
+import { createInterface } from 'node:readline/promises'
+import { stdin, stdout } from 'node:process'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+import { setVersion, DEFAULT_FILES } from './set-version.mjs'
 
-jobs:
-  prepare:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # full history + tags so git-cliff can compute the bump
-          # PAT so the branch push / PR creation runs the required CI checks
-          # (a PR opened by the default GITHUB_TOKEN does not trigger workflows).
-          token: ${{ secrets.RELEASE_PR_TOKEN }}
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+const SEMVER = /^\d+\.\d+\.\d+$/
+const LEVELS = new Set(['patch', 'minor', 'major'])
 
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
+// Run a command at the repo root, inheriting stdio so the user sees progress.
+function run(cmd, args) {
+  execFileSync(cmd, args, { cwd: repoRoot, stdio: 'inherit' })
+}
 
-      - name: Install git-cliff
-        uses: taiki-e/install-action@v2
-        with:
-          tool: git-cliff
+// Run a command at the repo root and return trimmed stdout.
+function capture(cmd, args) {
+  return execFileSync(cmd, args, { cwd: repoRoot, encoding: 'utf8' }).trim()
+}
 
-      - name: Compute version
-        id: version
-        run: |
-          set -euo pipefail
-          case "${{ inputs.bump }}" in
-            auto)
-              VERSION="$(git cliff --bumped-version | sed 's/^v//')" ;;
-            patch|minor|major)
-              VERSION="$(git cliff --bump "${{ inputs.bump }}" --bumped-version | sed 's/^v//')" ;;
-            *)
-              VERSION="${{ inputs.bump }}" ;;
-          esac
-          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::computed version '$VERSION' is not X.Y.Z"; exit 1
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Release version: $VERSION"
+function fail(message) {
+  console.error(`✗ ${message}`)
+  process.exit(1)
+}
 
-      - name: Configure git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+// npx ships git-cliff's binary; --yes avoids the install prompt on first use.
+function cliff(args) {
+  return capture('npx', ['--yes', 'git-cliff@2', ...args])
+}
 
-      - name: Create release branch
-        run: git switch -c "release/v${{ steps.version.outputs.version }}"
+async function main() {
+  const argv = process.argv.slice(2)
+  const dryRun = argv.includes('--dry-run')
+  const assumeYes = argv.includes('--yes')
+  const bump = argv.find((a) => !a.startsWith('--')) ?? 'auto'
 
-      - name: Stamp version into manifests
-        run: node web/scripts/release/set-version.mjs "${{ steps.version.outputs.version }}"
+  // --- Sync + compute version (dry-run needs only node + git + network) ---
+  run('git', ['fetch', 'origin', '--tags', '--prune'])
 
-      - name: Refresh Cargo.lock
-        run: cargo update --workspace
+  let version
+  if (SEMVER.test(bump)) {
+    version = bump
+  } else if (bump === 'auto') {
+    version = cliff(['--bumped-version']).replace(/^v/, '')
+  } else if (LEVELS.has(bump)) {
+    version = cliff(['--bump', bump, '--bumped-version']).replace(/^v/, '')
+  } else {
+    fail(`invalid bump "${bump}" (expected auto | patch | minor | major | x.y.z)`)
+  }
+  if (!SEMVER.test(version)) fail(`computed version "${version}" is not X.Y.Z`)
 
-      - name: Regenerate CHANGELOG.md
-        run: git cliff --tag "v${{ steps.version.outputs.version }}" -o CHANGELOG.md
+  const tag = `v${version}`
+  console.log('\nRelease plan:')
+  console.log(`  version : ${version}  (bump: ${bump})`)
+  console.log(`  branch  : release/${tag}  (from origin/main)`)
+  console.log('  updates : crates/*/Cargo.toml, web/package.json, Cargo.lock, CHANGELOG.md')
+  console.log(`  then    : push + open PR "release: ${tag}"\n`)
 
-      - name: Render PR body (release notes)
-        run: git cliff --unreleased --tag "v${{ steps.version.outputs.version }}" --strip all -o RELEASE_NOTES.md
+  if (dryRun) {
+    console.log('--dry-run: no changes made.')
+    return
+  }
 
-      - name: Commit
-        run: |
-          git add crates/engine/Cargo.toml crates/wasm/Cargo.toml web/package.json Cargo.lock CHANGELOG.md
-          git commit -m "release: v${{ steps.version.outputs.version }}"
+  // --- Preflight before mutating anything ---
+  try {
+    capture('cargo', ['--version'])
+  } catch {
+    fail('cargo not found on PATH — install the Rust toolchain.')
+  }
+  try {
+    execFileSync('gh', ['auth', 'status'], { cwd: repoRoot, stdio: 'ignore' })
+  } catch {
+    fail('gh is not authenticated — run `gh auth login`.')
+  }
+  if (capture('git', ['status', '--porcelain']) !== '') {
+    fail('working tree is not clean — commit or stash your changes first.')
+  }
 
-      - name: Push branch
-        run: git push -u origin "release/v${{ steps.version.outputs.version }}"
+  if (!assumeYes) {
+    const rl = createInterface({ input: stdin, output: stdout })
+    const answer = (await rl.question('Proceed? [y/N] ')).trim().toLowerCase()
+    rl.close()
+    if (answer !== 'y' && answer !== 'yes') {
+      console.log('Aborted.')
+      return
+    }
+  }
 
-      - name: Open release PR
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN }}
-        run: |
-          gh pr create \
-            --base main \
-            --head "release/v${{ steps.version.outputs.version }}" \
-            --title "release: v${{ steps.version.outputs.version }}" \
-            --body-file RELEASE_NOTES.md
+  // --- Mutate on a release branch ---
+  run('git', ['switch', '-c', `release/${tag}`, 'origin/main'])
+  await setVersion(version, DEFAULT_FILES)
+  run('cargo', ['update', '--workspace'])
+  run('npx', ['--yes', 'git-cliff@2', '--tag', tag, '-o', 'CHANGELOG.md'])
+
+  run('git', [
+    'add',
+    'crates/engine/Cargo.toml',
+    'crates/wasm/Cargo.toml',
+    'web/package.json',
+    'Cargo.lock',
+    'CHANGELOG.md',
+  ])
+  run('git', ['commit', '-m', `release: ${tag}`])
+  run('git', ['push', '-u', 'origin', `release/${tag}`])
+
+  const body = cliff(['--unreleased', '--tag', tag, '--strip', 'all'])
+  run('gh', [
+    'pr', 'create',
+    '--base', 'main',
+    '--head', `release/${tag}`,
+    '--title', `release: ${tag}`,
+    '--body', body,
+  ])
+  console.log(`\n✓ Opened release PR for ${tag}. Let CI pass, then squash-merge to publish.`)
+}
+
+main().catch((err) => fail(err.message))
 ```
 
-- [ ] **Step 2: Sanity-check YAML syntax**
+- [ ] **Step 2: Add the `release` npm script**
 
-Run: `ruby -ryaml -e "YAML.load_file('.github/workflows/release-prepare.yml')" && echo OK`
-Expected: prints `OK` (parses without error). This validates YAML syntax only, not Actions semantics — full validation happens when the workflow runs.
+In `web/package.json`, add a `"release"` entry to `scripts` (keep the others; place it after `"preview"`):
 
-- [ ] **Step 3: Commit**
+```json
+    "preview": "vite preview",
+    "release": "node scripts/release/prepare.mjs",
+```
+
+- [ ] **Step 3: Syntax-check the script**
+
+Run: `node --check web/scripts/release/prepare.mjs && echo OK`
+Expected: prints `OK` (valid syntax).
+
+- [ ] **Step 4: Verify the dry-run computes a version (best-effort runtime check)**
+
+Run: `cd web && npm run release -- --dry-run`
+Expected: prints a `Release plan:` block with a valid `version : X.Y.Z` and ends with `--dry-run: no changes made.`, leaving the working tree unchanged (`git status --porcelain` still clean).
+Note: the first `npx git-cliff` invocation downloads the binary, so this needs network access. If the sandbox blocks network and the download fails, report it — the syntax check (Step 3) plus the `set-version` unit test (Task 2) are the committed guarantees; the dry-run is then verified by the human during final review.
+
+- [ ] **Step 5: Confirm tsc is unaffected**
+
+Run: `cd web && npx tsc --noEmit`
+Expected: no errors. (`.mjs` scripts under `web/scripts/` are not part of the `tsc` source set; this confirms nothing regressed.)
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add .github/workflows/release-prepare.yml
-git commit -m "ci: add release-prepare workflow (opens version-bump release PR)"
+git add web/scripts/release/prepare.mjs web/package.json
+git commit -m "feat(release): add npm run release script (opens version-bump release PR)"
 ```
 
 ---
@@ -414,8 +474,9 @@ name: Release — publish
 
 # Fires on every push to main. Releases only when the version in
 # web/package.json has no matching git tag yet — i.e. right after a release PR
-# is squash-merged. Every other push is a no-op. Builds wasm from source +
-# web/dist, tags the commit, and creates the GitHub Release with the bundle.
+# (from `npm run release`) is squash-merged. Every other push is a no-op. Builds
+# wasm from source + web/dist, tags the commit, and creates the GitHub Release
+# with the bundle attached. Uses only the automatic GITHUB_TOKEN — no secret.
 on:
   push:
     branches: [main]
@@ -512,7 +573,7 @@ jobs:
 - [ ] **Step 2: Sanity-check YAML syntax**
 
 Run: `ruby -ryaml -e "YAML.load_file('.github/workflows/release-publish.yml')" && echo OK`
-Expected: prints `OK`.
+Expected: prints `OK` (parses without error). This validates YAML syntax only, not Actions semantics — full validation happens when the workflow runs.
 
 - [ ] **Step 3: Commit**
 
@@ -531,8 +592,8 @@ git commit -m "ci: add release-publish workflow (tag + GitHub Release on merge)"
 
 - [ ] **Step 1: Find every web unit-test count to update**
 
-Run: `grep -rn "31 " README.md CLAUDE.md; grep -rn "31 web unit" README.md CLAUDE.md; grep -rn "(31 tests)" README.md CLAUDE.md`
-Expected: lists each spot citing 31 web unit tests. Update each to the new total from Task 2 Step 5 (34 if the baseline was 31).
+Run: `grep -rn "31 web\|(31 tests)\|31 web unit\|31 tests" README.md CLAUDE.md`
+Expected: lists each spot citing 31 web unit tests. Update each to the new total from Task 2 Step 5 (34 if the baseline was 31). Do not touch the Rust "52 tests" counts.
 
 - [ ] **Step 2: Update the web unit-test counts**
 
@@ -548,52 +609,67 @@ Add this section (place it after the CI/testing section):
 Releases are driven by [Conventional Commits](https://www.conventionalcommits.org/)
 and `git-cliff`. The version is a single number covering web + Rust changes, and
 the **git tag (`vX.Y.Z`) is the source of truth** — never hand-edit the `version`
-fields in `crates/*/Cargo.toml` or `web/package.json`; a release stamps them.
+fields in `crates/*/Cargo.toml` or `web/package.json`; the release flow stamps
+them.
 
-To cut a release:
+There are **no repo secrets to configure**. You need `git`, Node, an
+authenticated [`gh`](https://cli.github.com/) CLI, and `cargo` (the binary
+`git-cliff` is fetched automatically via `npx`).
 
-1. In **Actions → "Release — prepare" → Run workflow**, leave `bump` as `auto`
-   (or force `patch`/`minor`/`major`/an explicit `x.y.z`). It computes the next
-   version from the commits since the last tag, bumps every version field +
-   `Cargo.lock` + `CHANGELOG.md` on a `release/vX.Y.Z` branch, and opens a PR.
-2. Review the PR; once the four CI checks pass, **squash-merge** it.
-3. Merging triggers **"Release — publish"**, which builds the wasm + web bundle,
-   tags the commit `vX.Y.Z`, and creates the GitHub Release with
-   `canfield-vX.Y.Z-web.zip` attached.
+To cut a release, from `web/`:
 
-**Versioning:** while on `0.x`, `feat` and breaking changes bump the minor and
-`fix` bumps the patch; from `1.0.0` on, breaking changes bump the major.
-
-**One-time setup:** the prepare workflow needs a repo secret `RELEASE_PR_TOKEN`
-(a fine-grained PAT with `Contents: read/write` + `Pull requests: read/write`)
-so the release PR triggers the required CI checks. Without it, after the bot
-opens the PR a maintainer must close and reopen the PR to trigger CI.
+```bash
+npm run release            # auto: next version computed from commits
+npm run release -- minor   # or force patch | minor | major
+npm run release -- 1.4.0   # or pick an explicit version
+npm run release -- --dry-run  # preview the computed version, change nothing
 ```
 
-- [ ] **Step 4: Add the release invariant + CI rows to `CLAUDE.md`**
+The script computes the next version from the commits since the last tag, bumps
+every version field + `Cargo.lock` + `CHANGELOG.md` on a `release/vX.Y.Z` branch,
+pushes it (with your credentials, so the required CI checks run), and opens a PR.
+Review it; once the four CI checks pass, **squash-merge** it.
+
+Merging triggers the **"Release — publish"** workflow, which builds the wasm +
+web bundle, tags the commit `vX.Y.Z`, and creates the GitHub Release with
+`canfield-vX.Y.Z-web.zip` attached.
+
+**Versioning:** while on `0.x`, `feat` and breaking changes bump the minor and
+`fix` bumps the patch; from `1.0.0` on, breaking changes bump the major. The
+first release has no prior tag, so pass an explicit version for it
+(`npm run release -- 0.2.0`).
+```
+
+- [ ] **Step 4: Add the release invariant, CI row, and command to `CLAUDE.md`**
 
 In `CLAUDE.md`, under "Key Design Constraints", add:
 
 ```markdown
-- **Versioning via release, not by hand.** The git tag `vX.Y.Z` is the source of
-  truth for the app version. The `version` fields in `crates/*/Cargo.toml` and
-  `web/package.json` are kept in lockstep by the release workflow — never edit
-  them manually. Run **Actions → "Release — prepare"** to bump. While on `0.x`,
-  `feat`/breaking bump minor and `fix` bumps patch; `git-cliff` (`cliff.toml`)
-  computes it from conventional commits.
+- **Versioning via `npm run release`, not by hand.** The git tag `vX.Y.Z` is the
+  source of truth for the app version. The `version` fields in
+  `crates/*/Cargo.toml` and `web/package.json` are kept in lockstep by the
+  release flow — never edit them manually. Run `npm run release` (from `web/`) to
+  cut a release: it opens a `release/vX.Y.Z` PR; squash-merging it triggers the
+  publish workflow. While on `0.x`, `feat`/breaking bump minor and `fix` bumps
+  patch; `git-cliff` (`cliff.toml`) computes it from conventional commits.
 ```
 
-And add these two rows to the CI jobs table:
+Add `npm run release` to the `web/` commands block:
+
+```bash
+npm run release            # cut a release (opens a version-bump PR; from web/)
+```
+
+And add this row to the CI jobs table:
 
 ```markdown
-| **Release — prepare** | `workflow_dispatch` only | Computes version via `git-cliff`, opens a `release/vX.Y.Z` PR (bumped manifests + `Cargo.lock` + `CHANGELOG.md`). Not a PR check. |
-| **Release — publish** | `push` to `main` | No-op unless `web/package.json`'s version has no tag; then builds the bundle, tags `vX.Y.Z`, and creates the GitHub Release. |
+| **Release — publish** | `push` to `main` | No-op unless `web/package.json`'s version has no tag; then builds the bundle, tags `vX.Y.Z`, and creates the GitHub Release. Triggered by squash-merging a `release/` PR. |
 ```
 
 - [ ] **Step 5: Verify docs reference reality**
 
-Run: `grep -rn "Release — prepare\|Release — publish\|RELEASE_PR_TOKEN\|cliff.toml" README.md CLAUDE.md`
-Expected: shows the new references in both files. Confirm no remaining stale `31`-test references: `grep -rn "31 web\|(31 tests)\|31 web unit" README.md CLAUDE.md` returns nothing.
+Run: `grep -rn "npm run release\|Release — publish\|cliff.toml\|git-cliff" README.md CLAUDE.md`
+Expected: shows the new references in both files. Confirm no remaining stale web-test references: `grep -rn "31 web\|(31 tests)\|31 web unit" README.md CLAUDE.md` returns nothing. Confirm no leftover PAT references: `grep -rn "RELEASE_PR_TOKEN\|workflow_dispatch" README.md CLAUDE.md` returns nothing.
 
 - [ ] **Step 6: Commit**
 
@@ -631,12 +707,16 @@ node web/scripts/release/set-version.mjs 9.9.9
 git --no-pager diff --stat
 git checkout -- crates/engine/Cargo.toml crates/wasm/Cargo.toml web/package.json
 ```
-Expected: the diff touches exactly the three manifests' version lines; the `checkout` reverts them cleanly (leaving no release-test changes staged).
+Expected: the diff touches exactly the three manifests' version lines; the `checkout` reverts them cleanly (leaving no release-test changes).
 
-- [ ] **Step 5: Both workflows parse**
+- [ ] **Step 5: Prepare dry-run + publish workflow parse**
 
-Run: `for f in .github/workflows/release-*.yml; do ruby -ryaml -e "YAML.load_file('$f')" && echo "$f OK"; done`
-Expected: both print `OK`.
+Run:
+```bash
+( cd web && npm run release -- --dry-run )
+ruby -ryaml -e "YAML.load_file('.github/workflows/release-publish.yml')" && echo "publish OK"
+```
+Expected: the dry-run prints a `Release plan:` with a valid version and makes no changes; the publish workflow prints `publish OK`. (If network blocks the `npx git-cliff` download, note it and rely on the human to run the dry-run during review.)
 
 - [ ] **Step 6: Push branch and open PR**
 
@@ -646,7 +726,7 @@ Follow the git-workflow skill: final `git fetch && git rebase origin/main`, revi
 
 ## Self-Review notes (for the implementer)
 
-- **Spec coverage:** composite single version (set-version + cliff bump) ✓; automated semver from conventional commits (Task 1 `[bump]`, Task 3 compute step) ✓; scripted + documented (Tasks 2 & 5) ✓; honors branch protection (prepare opens PR, publish only tags) ✓; zip asset (Task 4) ✓; Vitest test for the script (Task 2) ✓.
-- **Known prerequisite:** `RELEASE_PR_TOKEN` must exist before the prepare workflow can produce a mergeable PR (see Prerequisites). This is a human repo-settings step, intentionally not scripted.
+- **Spec coverage:** composite single version (set-version + cliff bump) ✓; automated semver from conventional commits (Task 1 `[bump]`, Task 3 compute step) ✓; scripted + documented + zero-setup (Tasks 3 & 5, `npx git-cliff`, no secrets) ✓; honors branch protection (prepare pushes a normal PR with contributor creds; publish only tags) ✓; zip asset (Task 4) ✓; Vitest test for `set-version` (Task 2) ✓.
+- **No repo secrets:** publish uses the automatic `GITHUB_TOKEN`; prepare is local. Nothing for an admin to provision.
 - **0.x bump check:** `breaking_always_bump_major = false` + `features_always_bump_minor = true` yields feat/breaking→minor, fix→patch while 0.x, and breaking→major once ≥1.0.
-```
+- **Naming consistency:** `setVersion(version, files)` + `DEFAULT_FILES` exported by `set-version.mjs` (Task 2) are imported by `prepare.mjs` (Task 3) and the test — identical names.
