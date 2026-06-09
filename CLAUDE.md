@@ -25,11 +25,12 @@ wasm-pack build crates/wasm --target web \
   --out-dir ../../web/src/pkg                   # Rebuild WASM after engine changes
 
 # From web/:
-npm test                   # Vitest unit tests — run once (31 tests)
+npm test                   # Vitest unit tests — run once (34 tests)
 npm run test:watch         # Vitest in watch mode
 npm run test:e2e           # Playwright E2E (4 tests, launches dev server)
 npm run build              # Production build → web/dist/
 npm run dev                # Dev server at http://localhost:5173
+npm run release            # Cut a release — opens a version-bump PR (see Releasing)
 npx tsc --noEmit           # TypeScript type-check only
 
 # Hooks install automatically via `npm install` (web/); manual fallback:
@@ -92,6 +93,7 @@ Plain TypeScript + Vite. No framework. Key files:
 - **Foundation suit assignment.** `foundation_suits[i]` is set at deal time and immutable for the life of the game. `can_place_on_foundation` hard-rejects any card whose suit doesn't match.
 - **Rank wrapping.** Both foundations and tableau use wrapping rank arithmetic: King→Ace on foundations, Ace→King on tableau (via `next_rank` / `prev_rank`).
 - **Draw order invariant.** After a full draw+redeal cycle, the stock card order is identical to the initial order. Two tests (`stock_order_preserved_after_cycle_draw1/3`) verify this.
+- **Versioning via `npm run release`, not by hand.** The git tag `vX.Y.Z` is the source of truth for the app version. The `version` fields in `crates/*/Cargo.toml` and `web/package.json` are kept in lockstep by the release flow — never edit them manually. Run `npm run release` (from `web/`): it computes the next version from conventional commits via `git-cliff`/`cliff.toml`, opens a `release/vX.Y.Z` PR, and squash-merging that PR triggers the publish workflow. While on `0.x`, `feat`/breaking bump the minor and `fix` bumps the patch.
 
 ## Testing Requirements
 
@@ -112,6 +114,8 @@ CI runs on every pull request and on pushes to `main`, defined in `.github/workf
 | **Web E2E (Playwright)** | downloads `wasm-pkg` → `npm run test:e2e` | `needs: wasm-build`. |
 
 CodeQL analysis (actions / JavaScript-TypeScript / Rust) also runs as a separate workflow.
+
+**Release — publish** (`.github/workflows/release-publish.yml`) is a separate workflow that runs on every push to `main`. It is a no-op unless `web/package.json`'s version has no matching tag yet (i.e. a `release/` PR was just squash-merged); then it builds the bundle, tags `vX.Y.Z`, and creates the GitHub Release with `canfield-vX.Y.Z-web.zip`. It uses only the automatic `GITHUB_TOKEN` and is not a required PR check. See the release flow in the Key Design Constraints.
 
 **WASM is built from source in CI, not trusted from the commit.** `web` and `e2e` download the `wasm-pkg` artifact and overwrite `web/src/pkg/` before building/testing, so the production bundle and E2E always run against wasm compiled from the current engine source — a stale or tampered committed binary cannot reach the build. `wasm-pack` output is **not** byte-reproducible across machines, so CI does **not** byte-compare the committed `web/src/pkg/`; keeping it fresh is a local Definition-of-Done step instead.
 
@@ -138,7 +142,7 @@ The `.githooks/pre-commit` hook automates the fast subset of this list (steps 1,
 
 Before every commit:
 1. `cargo test -p canfield-engine` — all Rust tests pass; `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` are clean (both are CI gates).
-2. `cd web && npm test` — all 31 web unit tests pass.
+2. `cd web && npm test` — all 34 web unit tests pass.
 3. **Ensure WASM is up to date.** If anything under `crates/engine/` or `crates/wasm/` changed, rebuild and commit the regenerated package:
    ```bash
    wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg
