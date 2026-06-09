@@ -71,12 +71,13 @@ wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg
 
 ```bash
 # From web/:
-npm test                   # Vitest unit tests (31 tests, jsdom, run once)
+npm test                   # Vitest unit tests (34 tests, jsdom, run once)
 npm run test:watch         # Vitest in watch mode
 npm run test:e2e           # Playwright E2E tests (4 tests, launches dev server)
 npm run build              # tsc + Vite production build → dist/
 npm run dev                # Vite dev server with HMR
 npm run preview            # Serve the production build locally
+npm run release            # Cut a release: compute version + open a PR (see Releasing)
 ```
 
 ## Testing
@@ -84,7 +85,7 @@ npm run preview            # Serve the production build locally
 | Suite | Command | Count |
 |---|---|---|
 | Rust engine unit tests | `cargo test -p canfield-engine` | 52 |
-| Web unit tests (Vitest/jsdom) | `cd web && npm test` | 31 |
+| Web unit tests (Vitest/jsdom) | `cd web && npm test` | 34 |
 | E2E tests (Playwright/Chromium) | `cd web && npm run test:e2e` | 4 |
 
 All tests must pass before committing. Web unit tests are isolated: they mock the WASM module and the `api` localStorage adapter — no real WASM execution or browser storage in unit tests.
@@ -111,6 +112,27 @@ git config core.hooksPath .githooks
 ```
 
 It runs the Rust gates (`fmt`, `clippy`, `cargo test`) when `crates/**` is staged and the web gates (`tsc`, `npm test`) when `web/**` is staged. Slow steps (wasm/production build, E2E) are left to CI. Bypass with `git commit --no-verify`.
+
+## Releasing
+
+Releases are driven by [Conventional Commits](https://www.conventionalcommits.org/) and [`git-cliff`](https://git-cliff.org). The version is a single number covering both web and Rust changes, and the **git tag (`vX.Y.Z`) is the source of truth** — never hand-edit the `version` fields in `crates/*/Cargo.toml` or `web/package.json`; the release flow stamps them.
+
+There are **no repo secrets to configure**. You need `git`, Node, an authenticated [`gh`](https://cli.github.com/) CLI, and `cargo` (the `git-cliff` binary is fetched automatically via `npx`).
+
+To cut a release, from `web/`:
+
+```bash
+npm run release               # auto: next version computed from commits
+npm run release -- minor      # or force patch | minor | major
+npm run release -- 1.4.0      # or pick an explicit version
+npm run release -- --dry-run  # preview the computed version, change nothing
+```
+
+The script computes the next version from the commits since the last tag (`feat`/breaking → minor, `fix` → patch while on `0.x`; from `1.0.0` on, breaking → major), bumps every version field + `Cargo.lock` + `CHANGELOG.md` on a `release/vX.Y.Z` branch, pushes it **with your credentials so the required CI checks run**, and opens a PR. Review it; once the four CI checks pass, **squash-merge** it.
+
+Merging triggers the **Release — publish** workflow (`.github/workflows/release-publish.yml`), which builds the wasm + web bundle, tags the commit `vX.Y.Z`, and creates the GitHub Release with `canfield-vX.Y.Z-web.zip` attached. It is a no-op on any push whose version already has a tag.
+
+The first release has no prior tag, so pass an explicit version for it (`npm run release -- 0.2.0`).
 
 ## Game Rules Implemented
 
