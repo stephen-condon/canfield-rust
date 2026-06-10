@@ -10,9 +10,33 @@ import {
 import { createCardElement, createFoundationPlaceholder, createGlyphPlaceholder } from './card'
 import { startConfetti, type ConfettiHandle } from './confetti'
 import { api } from './api'
-import type { GameState, Card } from './types'
+import type { GameState, Card, Preferences } from './types'
 
 const app = (): HTMLElement => document.getElementById('app')!
+
+// Apply the user's chosen background and card-back images. Both are stored as
+// data URLs in preferences; we assign them via style/CSS-variable rather than
+// innerHTML so user-supplied strings never become markup. Null falls back to
+// the built-in felt / striped card back defined in the stylesheet.
+export function applyTheme(prefs: Preferences): void {
+  const body = document.body
+  if (prefs.backgroundPath) {
+    body.style.backgroundImage = `url("${prefs.backgroundPath}")`
+    body.style.backgroundSize = 'cover'
+    body.style.backgroundPosition = 'center'
+  } else {
+    body.style.backgroundImage = ''
+    body.style.backgroundSize = ''
+    body.style.backgroundPosition = ''
+  }
+  if (prefs.cardBackPath) {
+    body.style.setProperty('--card-back-image', `url("${prefs.cardBackPath}")`)
+    body.classList.add('has-custom-card-back')
+  } else {
+    body.style.removeProperty('--card-back-image')
+    body.classList.remove('has-custom-card-back')
+  }
+}
 
 function parseState(json: string): GameState {
   return JSON.parse(json) as GameState
@@ -48,6 +72,7 @@ function formatTime(ms: number): string {
 
 export function renderMainMenu(): void {
   stopTimer()
+  applyTheme(api.getPreferences())
   const savedGame = api.getSavedGame()
   app().innerHTML = `
     <div id="screen-menu" class="screen active">
@@ -87,6 +112,7 @@ export function renderMainMenu(): void {
 
 export function renderGameBoard(stateJson: string): void {
   let state = parseState(stateJson)
+  applyTheme(api.getPreferences())
 
   function updateDOM(): void {
     const reserveEl = document.getElementById('zone-reserve')!
@@ -403,6 +429,16 @@ function renderPreferences(): void {
             <option value="3">Draw 3</option>
           </select>
         </label>
+        <div class="pref-row">
+          <span>Background:</span>
+          <input type="file" id="pref-background" accept="image/*" />
+          <button id="btn-clear-background" class="btn-secondary">Default</button>
+        </div>
+        <div class="pref-row">
+          <span>Card Back:</span>
+          <input type="file" id="pref-card-back" accept="image/*" />
+          <button id="btn-clear-card-back" class="btn-secondary">Default</button>
+        </div>
         <button id="btn-save-prefs">Save</button>
         <button id="btn-back-prefs" class="btn-secondary">Back</button>
       </div>
@@ -410,6 +446,31 @@ function renderPreferences(): void {
 
   const select = document.getElementById('pref-draw-count') as HTMLSelectElement
   select.value = String(prefs.drawCount)
+
+  // Read a chosen image as a data URL, persist it under `key`, and apply it
+  // immediately so the change is visible without leaving the screen.
+  const wireImagePicker = (inputId: string, key: 'backgroundPath' | 'cardBackPath'): void => {
+    document.getElementById(inputId)!.addEventListener('change', (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        api.setPreferences({ [key]: reader.result as string })
+        applyTheme(api.getPreferences())
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+  const wireImageReset = (buttonId: string, key: 'backgroundPath' | 'cardBackPath'): void => {
+    document.getElementById(buttonId)!.addEventListener('click', () => {
+      api.setPreferences({ [key]: null })
+      applyTheme(api.getPreferences())
+    })
+  }
+  wireImagePicker('pref-background', 'backgroundPath')
+  wireImagePicker('pref-card-back', 'cardBackPath')
+  wireImageReset('btn-clear-background', 'backgroundPath')
+  wireImageReset('btn-clear-card-back', 'cardBackPath')
 
   document.getElementById('btn-save-prefs')!.addEventListener('click', () => {
     const val = (document.getElementById('pref-draw-count') as HTMLSelectElement).value

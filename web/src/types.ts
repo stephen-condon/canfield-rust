@@ -33,6 +33,7 @@ export interface GameState {
 export interface Preferences {
   drawCount: 1 | 3
   backgroundPath: string | null
+  cardBackPath: string | null
 }
 
 export interface Statistics {

@@ -113,6 +113,19 @@ body {
       transparent 1px, transparent 9px);
 }
 
+/* A user-supplied card back (data URL in --card-back-image) covers the whole
+   face-down card, replacing the default striped pattern. */
+body.has-custom-card-back .playing-card.face-down {
+  background: none;
+}
+body.has-custom-card-back .card-back-pattern {
+  inset: 0;
+  border: none;
+  background-image: var(--card-back-image);
+  background-size: cover;
+  background-position: center;
+}
+
 /* Corner index (rank + suit). Top-left by default. */
 .card-corner {
   position: absolute;
@@ -364,6 +377,21 @@ body {
   font-size: 16px;
   letter-spacing: 0.04em;
   color: rgba(242, 236, 220, 0.85);
+}
+
+.pref-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: rgba(242, 236, 220, 0.85);
+}
+.pref-row input[type='file'] {
+  flex: 1;
+  min-width: 0;
+  color: rgba(242, 236, 220, 0.7);
+  font-size: 13px;
 }
 
 select {

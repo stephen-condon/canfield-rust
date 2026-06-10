@@ -12,6 +12,25 @@ describe('preferences', () => {
     api.setPreferences({ drawCount: 1 })
     expect(api.getPreferences().drawCount).toBe(1)
   })
+
+  it('defaults the card back and background to null', () => {
+    const prefs = api.getPreferences()
+    expect(prefs.cardBackPath).toBeNull()
+    expect(prefs.backgroundPath).toBeNull()
+  })
+
+  it('persists a custom card back without dropping other preferences', () => {
+    api.setPreferences({ drawCount: 1 })
+    api.setPreferences({ cardBackPath: 'data:image/png;base64,AAAA' })
+    const prefs = api.getPreferences()
+    expect(prefs.cardBackPath).toBe('data:image/png;base64,AAAA')
+    expect(prefs.drawCount).toBe(1)
+  })
+
+  it('fills in new preference defaults for previously stored preferences', () => {
+    localStorage.setItem('canfield:preferences', JSON.stringify({ drawCount: 1 }))
+    expect(api.getPreferences().cardBackPath).toBeNull()
+  })
 })
 
 describe('statistics', () => {

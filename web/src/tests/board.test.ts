@@ -18,7 +18,7 @@ vi.mock('../pkg/canfield_wasm.js', () => ({
 
 vi.mock('../api', () => ({
   api: {
-    getPreferences: vi.fn().mockReturnValue({ drawCount: 3, backgroundPath: null }),
+    getPreferences: vi.fn().mockReturnValue({ drawCount: 3, backgroundPath: null, cardBackPath: null }),
     setPreferences: vi.fn(),
     getStatistics: vi.fn().mockReturnValue({ gamesPlayed: 0, wins: 0, losses: 0 }),
     recordWin: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock('../api', () => ({
   },
 }))
 
-import { renderGameBoard, renderMainMenu, stopTimer } from '../board'
+import { renderGameBoard, renderMainMenu, stopTimer, applyTheme } from '../board'
 import { api } from '../api'
 import {
   new_game,
@@ -40,7 +40,11 @@ import {
 beforeEach(() => {
   document.body.innerHTML = '<div id="app"></div>'
   vi.clearAllMocks()
-  vi.mocked(api.getPreferences).mockReturnValue({ drawCount: 3, backgroundPath: null })
+  vi.mocked(api.getPreferences).mockReturnValue({
+    drawCount: 3,
+    backgroundPath: null,
+    cardBackPath: null,
+  })
   vi.mocked(api.getSavedGame).mockReturnValue(null)
   vi.mocked(api.getStatistics).mockReturnValue({ gamesPlayed: 0, wins: 0, losses: 0 })
   vi.mocked(new_game).mockReturnValue(EMPTY_STATE)
@@ -308,6 +312,61 @@ describe('drop-target highlighting', () => {
     Object.defineProperty(drop, 'dataTransfer', { value: { getData: () => '' } })
     f.dispatchEvent(drop)
     expect(f.classList.contains('drop-active')).toBe(false)
+  })
+})
+
+describe('theme preferences', () => {
+  const openPrefs = (): void => {
+    renderMainMenu()
+    document.getElementById('btn-preferences')!.click()
+  }
+
+  it('renders background and card-back controls', () => {
+    openPrefs()
+    expect(document.getElementById('pref-background')).toBeTruthy()
+    expect(document.getElementById('pref-card-back')).toBeTruthy()
+    expect(document.getElementById('btn-clear-background')).toBeTruthy()
+    expect(document.getElementById('btn-clear-card-back')).toBeTruthy()
+  })
+
+  it('clears the background preference with its Default button', () => {
+    openPrefs()
+    document.getElementById('btn-clear-background')!.click()
+    expect(api.setPreferences).toHaveBeenCalledWith({ backgroundPath: null })
+  })
+
+  it('clears the card-back preference with its Default button', () => {
+    openPrefs()
+    document.getElementById('btn-clear-card-back')!.click()
+    expect(api.setPreferences).toHaveBeenCalledWith({ cardBackPath: null })
+  })
+})
+
+describe('applyTheme', () => {
+  afterEach(() => {
+    document.body.style.backgroundImage = ''
+    document.body.classList.remove('has-custom-card-back')
+    document.body.style.removeProperty('--card-back-image')
+  })
+
+  it('sets a custom background image on the body', () => {
+    applyTheme({ drawCount: 3, backgroundPath: 'data:image/png;base64,BG', cardBackPath: null })
+    expect(document.body.style.backgroundImage).toContain('data:image/png;base64,BG')
+  })
+
+  it('applies a custom card back via class and CSS variable', () => {
+    applyTheme({ drawCount: 3, backgroundPath: null, cardBackPath: 'data:image/png;base64,CB' })
+    expect(document.body.classList.contains('has-custom-card-back')).toBe(true)
+    expect(document.body.style.getPropertyValue('--card-back-image')).toContain(
+      'data:image/png;base64,CB',
+    )
+  })
+
+  it('clears custom theming when both preferences are null', () => {
+    applyTheme({ drawCount: 3, backgroundPath: 'x', cardBackPath: 'y' })
+    applyTheme({ drawCount: 3, backgroundPath: null, cardBackPath: null })
+    expect(document.body.style.backgroundImage).toBe('')
+    expect(document.body.classList.contains('has-custom-card-back')).toBe(false)
   })
 })
 

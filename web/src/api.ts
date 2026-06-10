@@ -6,13 +6,15 @@ const KEYS = {
   savedGame: 'canfield:savedGame',
 }
 
-const DEFAULT_PREFS: Preferences = { drawCount: 3, backgroundPath: null }
+const DEFAULT_PREFS: Preferences = { drawCount: 3, backgroundPath: null, cardBackPath: null }
 const DEFAULT_STATS: Statistics = { gamesPlayed: 0, wins: 0, losses: 0 }
 
-function load<T>(key: string, fallback: T): T {
+// Merge stored values over the defaults so preferences/statistics saved before
+// a new field existed still come back with that field populated.
+function load<T extends object>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : fallback
+    return raw ? { ...fallback, ...(JSON.parse(raw) as T) } : fallback
   } catch {
     return fallback
   }
