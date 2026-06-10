@@ -166,6 +166,19 @@ export function renderGameBoard(stateJson: string): void {
     return null
   }
 
+  // Resolve the source zone for any single card that can move to a foundation:
+  // the waste/reserve top, or a tableau column's top (last) card. A buried
+  // tableau card has no single-card foundation source and returns null.
+  function findSourceZone(cardId: string): string | null {
+    const zone = findZoneForCard(cardId)
+    if (zone) return zone
+    for (let col = 0; col < 4; col++) {
+      const pile = state.tableau[col]
+      if (pile.length > 0 && pile[pile.length - 1].id === cardId) return `tableau_${col}`
+    }
+    return null
+  }
+
   function findTableauCol(cardId: string): number | null {
     for (let col = 0; col < 4; col++) {
       if (state.tableau[col].some((c) => c.id === cardId)) return col
@@ -220,7 +233,7 @@ export function renderGameBoard(stateJson: string): void {
     fEl.addEventListener('drop', (e) => {
       e.preventDefault()
       const cardId = e.dataTransfer?.getData('text/plain') ?? ''
-      const zone = findZoneForCard(cardId)
+      const zone = findSourceZone(cardId)
       if (zone) applyMove(move_to_foundation(JSON.stringify(state), zone, i))
     })
   }
@@ -246,7 +259,7 @@ export function renderGameBoard(stateJson: string): void {
   // Double-click → auto move to foundation
   app().addEventListener('card-dbl-click', (e) => {
     const card = (e as CustomEvent<Card>).detail
-    const zone = findZoneForCard(card.id)
+    const zone = findSourceZone(card.id)
     if (zone) applyMove(auto_move_to_foundation(JSON.stringify(state), zone))
   })
 

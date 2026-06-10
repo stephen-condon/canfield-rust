@@ -25,7 +25,7 @@ wasm-pack build crates/wasm --target web \
   --out-dir ../../web/src/pkg                   # Rebuild WASM after engine changes
 
 # From web/:
-npm test                   # Vitest unit tests — run once (34 tests)
+npm test                   # Vitest unit tests — run once (37 tests)
 npm run test:watch         # Vitest in watch mode
 npm run test:e2e           # Playwright E2E (4 tests, launches dev server)
 npm run build              # Production build → web/dist/
@@ -142,7 +142,7 @@ The `.githooks/pre-commit` hook automates the fast subset of this list (steps 1,
 
 Before every commit:
 1. `cargo test -p canfield-engine` — all Rust tests pass; `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` are clean (both are CI gates).
-2. `cd web && npm test` — all 34 web unit tests pass.
+2. `cd web && npm test` — all 37 web unit tests pass.
 3. **Ensure WASM is up to date.** If anything under `crates/engine/` or `crates/wasm/` changed, rebuild and commit the regenerated package:
    ```bash
    wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg
