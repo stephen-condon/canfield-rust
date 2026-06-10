@@ -23,6 +23,34 @@ export function isRed(suit: string): boolean {
   return suit === 'hearts' || suit === 'diamonds'
 }
 
+// Faded rank+suit watermark for an empty foundation, showing the base rank and
+// the suit that foundation accepts (e.g. "J♥"). Non-interactive.
+export function createFoundationPlaceholder(baseRank: number, suit: string): HTMLElement {
+  const el = document.createElement('div')
+  el.className = 'pile-placeholder foundation-hint'
+  el.classList.add(isRed(suit) ? 'rank-red' : 'rank-black')
+
+  const rank = document.createElement('div')
+  rank.className = 'hint-rank'
+  rank.textContent = rankLabel(baseRank)
+  el.appendChild(rank)
+
+  const suitEl = document.createElement('div')
+  suitEl.className = 'hint-suit'
+  suitEl.textContent = suitSymbol(suit)
+  el.appendChild(suitEl)
+
+  return el
+}
+
+// Faded single-glyph hint for an empty reserve / stock / tableau slot.
+export function createGlyphPlaceholder(kind: 'reserve' | 'stock' | 'tableau', glyph: string): HTMLElement {
+  const el = document.createElement('div')
+  el.className = `pile-placeholder ${kind}-hint`
+  el.textContent = glyph
+  return el
+}
+
 export interface CardElementOptions {
   draggable?: boolean
   isDragging?: boolean

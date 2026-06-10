@@ -25,7 +25,7 @@ wasm-pack build crates/wasm --target web \
   --out-dir ../../web/src/pkg                   # Rebuild WASM after engine changes
 
 # From web/:
-npm test                   # Vitest unit tests — run once (37 tests)
+npm test                   # Vitest unit tests — run once (43 tests)
 npm run test:watch         # Vitest in watch mode
 npm run test:e2e           # Playwright E2E (4 tests, launches dev server)
 npm run build              # Production build → web/dist/
@@ -79,7 +79,7 @@ Plain TypeScript + Vite. No framework. Key files:
 
 - `src/main.ts` — Calls `await init()` to initialize the WASM module, then `renderMainMenu()`.
 - `src/board.ts` — All screen rendering: `renderMainMenu`, `renderGameBoard`, `renderStatistics`, `renderPreferences`. Also owns the game timer (`setInterval`).
-- `src/card.ts` — `createCardElement(card, opts)` — the only DOM factory for card elements. Emits `card-dbl-click` and `card-drag-start` custom events that bubble up to the board.
+- `src/card.ts` — `createCardElement(card, opts)` — the only DOM factory for card elements. Emits `card-dbl-click` and `card-drag-start` custom events that bubble up to the board. Also exports `createFoundationPlaceholder` / `createGlyphPlaceholder` — the faded watermarks shown inside empty piles (foundation base rank+suit, reserve 🃏, stock ↺, and a tableau ♦ hint shown only while the reserve is non-empty). Placeholders are `pointer-events: none` so they never intercept drops.
 - `src/api.ts` — `localStorage` adapter. Mirrors the `window.api` IPC interface from the original Electron app. All persistence goes through this module.
 - `src/types.ts` — TypeScript mirror of the Rust types. Used for IDE support only; the canonical source of truth is `crates/engine/src/types.rs`.
 
@@ -142,7 +142,7 @@ The `.githooks/pre-commit` hook automates the fast subset of this list (steps 1,
 
 Before every commit:
 1. `cargo test -p canfield-engine` — all Rust tests pass; `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` are clean (both are CI gates).
-2. `cd web && npm test` — all 37 web unit tests pass.
+2. `cd web && npm test` — all 43 web unit tests pass.
 3. **Ensure WASM is up to date.** If anything under `crates/engine/` or `crates/wasm/` changed, rebuild and commit the regenerated package:
    ```bash
    wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg
