@@ -277,6 +277,40 @@ describe('empty-pile placeholders', () => {
   })
 })
 
+describe('drop-target highlighting', () => {
+  const fire = (el: Element, type: string): void => {
+    el.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }))
+  }
+
+  it('highlights a foundation while a card is dragged over it', () => {
+    renderGameBoard(EMPTY_STATE)
+    const f = document.getElementById('zone-foundation-0')!
+    fire(f, 'dragover')
+    expect(f.classList.contains('drop-active')).toBe(true)
+    fire(f, 'dragleave')
+    expect(f.classList.contains('drop-active')).toBe(false)
+  })
+
+  it('highlights a tableau column while a card is dragged over it', () => {
+    renderGameBoard(EMPTY_STATE)
+    const t = document.getElementById('zone-tableau-0')!
+    fire(t, 'dragover')
+    expect(t.classList.contains('drop-active')).toBe(true)
+    fire(t, 'dragleave')
+    expect(t.classList.contains('drop-active')).toBe(false)
+  })
+
+  it('clears the highlight when a card is dropped', () => {
+    renderGameBoard(EMPTY_STATE)
+    const f = document.getElementById('zone-foundation-0')!
+    fire(f, 'dragover')
+    const drop = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(drop, 'dataTransfer', { value: { getData: () => '' } })
+    f.dispatchEvent(drop)
+    expect(f.classList.contains('drop-active')).toBe(false)
+  })
+})
+
 describe('main menu', () => {
   it('shows New Game, Statistics, Preferences buttons', () => {
     renderMainMenu()
