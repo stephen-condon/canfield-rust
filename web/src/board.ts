@@ -237,12 +237,30 @@ export function renderGameBoard(stateJson: string): void {
     applyMove(draw_from_stock(JSON.stringify(state)) ?? redeal_stock(JSON.stringify(state)))
   })
 
+  // Highlight a drop zone while a card hovers it. dragover fires continuously,
+  // so it re-asserts the class even if a spurious dragleave fires when the
+  // cursor passes over a child card element.
+  function wireDropHighlight(el: HTMLElement): void {
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault()
+      el.classList.add('drop-active')
+    })
+    el.addEventListener('dragleave', () => el.classList.remove('drop-active'))
+  }
+
+  function clearDropHighlights(): void {
+    document
+      .querySelectorAll('.zone.drop-active')
+      .forEach((el) => el.classList.remove('drop-active'))
+  }
+
   // Foundation drop targets
   for (let i = 0; i < 4; i++) {
     const fEl = document.getElementById(`zone-foundation-${i}`)!
-    fEl.addEventListener('dragover', (e) => e.preventDefault())
+    wireDropHighlight(fEl)
     fEl.addEventListener('drop', (e) => {
       e.preventDefault()
+      clearDropHighlights()
       const cardId = e.dataTransfer?.getData('text/plain') ?? ''
       const zone = findSourceZone(cardId)
       if (zone) applyMove(move_to_foundation(JSON.stringify(state), zone, i))
@@ -252,8 +270,9 @@ export function renderGameBoard(stateJson: string): void {
   // Tableau drop targets
   for (let col = 0; col < 4; col++) {
     const tEl = document.getElementById(`zone-tableau-${col}`)!
-    tEl.addEventListener('dragover', (e) => e.preventDefault())
+    wireDropHighlight(tEl)
     tEl.addEventListener('drop', (e) => {
+      clearDropHighlights()
       e.preventDefault()
       const cardId = e.dataTransfer?.getData('text/plain') ?? ''
       const fromCol = findTableauCol(cardId)
@@ -266,6 +285,9 @@ export function renderGameBoard(stateJson: string): void {
       }
     })
   }
+
+  // A drag released outside any zone still needs the highlight cleared.
+  app().addEventListener('dragend', clearDropHighlights)
 
   // Double-click → auto move to foundation
   app().addEventListener('card-dbl-click', (e) => {
