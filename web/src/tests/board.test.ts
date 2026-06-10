@@ -31,7 +31,11 @@ vi.mock('../api', () => ({
 
 import { renderGameBoard, renderMainMenu, stopTimer } from '../board'
 import { api } from '../api'
-import { new_game } from '../pkg/canfield_wasm.js'
+import {
+  new_game,
+  move_to_foundation,
+  auto_move_to_foundation,
+} from '../pkg/canfield_wasm.js'
 
 beforeEach(() => {
   document.body.innerHTML = '<div id="app"></div>'
@@ -138,6 +142,85 @@ describe('waste fan', () => {
     const cards = document.querySelectorAll('#waste-slot .playing-card')
     expect(cards.length).toBe(1)
     expect((cards[0] as HTMLElement).draggable).toBe(true)
+  })
+})
+
+describe('tableau to foundation', () => {
+  // A tableau where column 2's top (last) card is the Queen of Hearts.
+  const stateWithTableauTop = (): string =>
+    JSON.stringify({
+      baseRank: 11,
+      foundationSuits: ['hearts', 'diamonds', 'clubs', 'spades'],
+      foundations: [[], [], [], []],
+      tableau: [
+        [],
+        [],
+        [{ id: 'hearts_12', suit: 'hearts', rank: 12, faceUp: true }],
+        [],
+      ],
+      reserve: [],
+      stock: [],
+      waste: [],
+      drawCount: 3,
+      moves: 0,
+      elapsedMs: 0,
+      won: false,
+    })
+
+  // Column 2 holds a buried Hearts Queen under a Clubs Five (the real top card).
+  const stateWithBuriedCard = (): string =>
+    JSON.stringify({
+      baseRank: 11,
+      foundationSuits: ['hearts', 'diamonds', 'clubs', 'spades'],
+      foundations: [[], [], [], []],
+      tableau: [
+        [],
+        [],
+        [
+          { id: 'hearts_12', suit: 'hearts', rank: 12, faceUp: true },
+          { id: 'clubs_5', suit: 'clubs', rank: 5, faceUp: true },
+        ],
+        [],
+      ],
+      reserve: [],
+      stock: [],
+      waste: [],
+      drawCount: 3,
+      moves: 0,
+      elapsedMs: 0,
+      won: false,
+    })
+
+  const fireDrop = (el: Element, cardId: string): void => {
+    const event = new Event('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'dataTransfer', {
+      value: { getData: () => cardId },
+    })
+    el.dispatchEvent(event)
+  }
+
+  it('drops a tableau-top card onto its foundation via move_to_foundation', () => {
+    renderGameBoard(stateWithTableauTop())
+    fireDrop(document.getElementById('zone-foundation-0')!, 'hearts_12')
+    expect(move_to_foundation).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(move_to_foundation).mock.calls[0][1]).toBe('tableau_2')
+    expect(vi.mocked(move_to_foundation).mock.calls[0][2]).toBe(0)
+  })
+
+  it('double-clicking a tableau-top card auto-moves it to a foundation', () => {
+    renderGameBoard(stateWithTableauTop())
+    const card = document.querySelector(
+      '#zone-tableau-2 .playing-card[data-card-id="hearts_12"]',
+    )!
+    card.dispatchEvent(new Event('dblclick', { bubbles: true }))
+    expect(auto_move_to_foundation).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(auto_move_to_foundation).mock.calls[0][1]).toBe('tableau_2')
+  })
+
+  it('does not send a buried tableau card to a foundation', () => {
+    renderGameBoard(stateWithBuriedCard())
+    fireDrop(document.getElementById('zone-foundation-0')!, 'hearts_12')
+    expect(move_to_foundation).not.toHaveBeenCalled()
   })
 })
 
