@@ -38,14 +38,14 @@ Legend: ✅ present · ❌ absent · ⚠️ partial
 | Win detection (52 on foundations) | ✅ | ✅ | Parity |
 | Multi-card tableau→tableau drag | ✅ | ✅ | Parity |
 | Waste/reserve → foundation drag & dbl-click | ✅ | ✅ | Parity |
-| **Tableau → foundation drag** | ✅ | ❌ **broken** | **Fixed (this PR)** |
-| **Tableau-top dbl-click → foundation** | ✅ | ❌ broken | **Fixed (this PR)** |
-| **Empty foundation rank+suit watermark** | ✅ | ❌ | Plan: PR2 |
-| **Empty reserve 🃏 / stock ↺ icons** | ✅ | ❌ | Plan: PR2 |
-| **Tableau ♦ hint (while reserve non-empty)** | ✅ | ❌ | Plan: PR2 |
-| **Drop-target highlighting** | ✅ | ⚠️ CSS exists, never wired | Plan: PR3 |
-| **Win confetti animation** | ✅ | ❌ | Plan: PR4 |
-| **Custom card-back / background image** | ✅ (native dialog) | ⚠️ `backgroundPath` vestigial | Plan: PR5 (web-adapted upload) |
+| **Tableau → foundation drag** | ✅ | ✅ | Migrated |
+| **Tableau-top dbl-click → foundation** | ✅ | ✅ | Migrated |
+| **Empty foundation rank+suit watermark** | ✅ | ✅ | Migrated |
+| **Empty reserve 🃏 / stock ↺ icons** | ✅ | ✅ | Migrated |
+| **Tableau ♦ hint (while reserve non-empty)** | ✅ | ✅ | Migrated |
+| **Drop-target highlighting** | ✅ | ✅ | Migrated |
+| **Win confetti animation** | ✅ | ✅ | Migrated |
+| **Custom card-back / background image** | ✅ (native dialog) | ✅ (web file upload → data URL) | Migrated, web-adapted |
 | Single auto-save slot + Resume | ✅ | ✅ | Parity |
 | Statistics: games / wins / losses / win% | ✅ | ✅ | Parity |
 | Surrender flow (confirm + post-surrender overlay) | ✅ | ✅ | Parity |
@@ -67,6 +67,6 @@ added as net-new features:
 ## Electron-only capabilities
 
 - The predecessor's image import used a **native OS file dialog** and stored
-  `file://` paths. A pure web build cannot open a native dialog, so PR5 adapts
-  this to an in-page file `<input>` that reads the image as a data URL and
-  persists it in `localStorage`.
+  `file://` paths. A pure web build cannot open a native dialog, so this rewrite
+  uses an in-page file `<input>` that reads the image as a data URL and persists
+  it in `localStorage`.
