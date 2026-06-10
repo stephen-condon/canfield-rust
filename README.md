@@ -25,6 +25,7 @@ canfield/
     │   ├── main.ts         WASM init → renderMainMenu
     │   ├── board.ts        all screen rendering (menu, game, stats, prefs)
     │   ├── card.ts         DOM card element factory
+    │   ├── confetti.ts     canvas confetti burst for the win overlay
     │   ├── api.ts          localStorage adapter (replaces electron-store)
     │   └── types.ts        TypeScript mirror of Rust types
     ├── src/tests/          Vitest unit tests (jsdom)
@@ -71,7 +72,7 @@ wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg
 
 ```bash
 # From web/:
-npm test                   # Vitest unit tests (46 tests, jsdom, run once)
+npm test                   # Vitest unit tests (50 tests, jsdom, run once)
 npm run test:watch         # Vitest in watch mode
 npm run test:e2e           # Playwright E2E tests (4 tests, launches dev server)
 npm run build              # tsc + Vite production build → dist/
@@ -85,7 +86,7 @@ npm run release            # Cut a release: compute version + open a PR (see Rel
 | Suite | Command | Count |
 |---|---|---|
 | Rust engine unit tests | `cargo test -p canfield-engine` | 52 |
-| Web unit tests (Vitest/jsdom) | `cd web && npm test` | 46 |
+| Web unit tests (Vitest/jsdom) | `cd web && npm test` | 50 |
 | E2E tests (Playwright/Chromium) | `cd web && npm run test:e2e` | 4 |
 
 All tests must pass before committing. Web unit tests are isolated: they mock the WASM module and the `api` localStorage adapter — no real WASM execution or browser storage in unit tests.
@@ -140,7 +141,7 @@ The first release has no prior tag, so pass an explicit version for it (`npm run
 - **Tableau**: columns built down in alternating colors, wrapping Ace→King. Empty columns are automatically filled from the reserve.
 - **Reserve**: thirteen cards dealt face-down; top card always exposed. Automatically refills empty tableau columns after every move.
 - **Stock / Waste**: draw 1 or draw 3 per click. The waste pile may be redealt into the stock exactly once per cycle (order preserved).
-- **Win condition**: all 52 cards on the foundations.
+- **Win condition**: all 52 cards on the foundations. Winning triggers a canvas confetti burst (skipped when the OS requests reduced motion).
 - **No undo**: by design.
 
 Empty piles show faded watermarks: each empty foundation shows the base rank and the suit it accepts (e.g. "J♥"), the empty reserve and stock show 🃏 and ↺, and an empty tableau column shows a ♦ hint while the reserve still has cards to auto-fill it. While dragging a card, the foundation or tableau zone under the cursor is highlighted as a valid drop target.

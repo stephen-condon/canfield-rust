@@ -8,6 +8,7 @@ import {
   auto_move_to_foundation,
 } from './pkg/canfield_wasm.js'
 import { createCardElement, createFoundationPlaceholder, createGlyphPlaceholder } from './card'
+import { startConfetti, type ConfettiHandle } from './confetti'
 import { api } from './api'
 import type { GameState, Card } from './types'
 
@@ -159,6 +160,8 @@ export function renderGameBoard(stateJson: string): void {
     updateDOM()
   }
 
+  let confetti: ConfettiHandle | null = null
+
   function showWinOverlay(): void {
     stopTimer()
     api.recordWin()
@@ -167,6 +170,12 @@ export function renderGameBoard(stateJson: string): void {
     overlay.style.display = 'flex'
     document.getElementById('win-moves')!.textContent = String(state.moves)
     document.getElementById('win-time')!.textContent = formatTime(elapsedMs)
+    confetti = startConfetti(document.getElementById('win-confetti') as HTMLCanvasElement)
+  }
+
+  function dismissWinOverlay(): void {
+    confetti?.stop()
+    confetti = null
   }
 
   function findZoneForCard(cardId: string): string | null {
@@ -224,6 +233,7 @@ export function renderGameBoard(stateJson: string): void {
         <button id="btn-main-menu-after">Main Menu</button>
       </div>
       <div id="overlay-win" style="display:none" class="overlay">
+        <canvas id="win-confetti" class="confetti-canvas"></canvas>
         <h2>You Won!</h2>
         <p>Moves: <span id="win-moves"></span></p>
         <p>Time: <span id="win-time"></span></p>
@@ -324,6 +334,7 @@ export function renderGameBoard(stateJson: string): void {
   document.getElementById('btn-main-menu-after')!.addEventListener('click', renderMainMenu)
 
   document.getElementById('btn-play-again')!.addEventListener('click', () => {
+    dismissWinOverlay()
     const prefs = api.getPreferences()
     const newStateJson = new_game(prefs.drawCount)
     elapsedMs = 0
@@ -331,7 +342,10 @@ export function renderGameBoard(stateJson: string): void {
     renderGameBoard(newStateJson)
   })
 
-  document.getElementById('btn-main-menu-win')!.addEventListener('click', renderMainMenu)
+  document.getElementById('btn-main-menu-win')!.addEventListener('click', () => {
+    dismissWinOverlay()
+    renderMainMenu()
+  })
   document.getElementById('btn-menu')!.addEventListener('click', renderMainMenu)
 
   startTimer((ms) => {
