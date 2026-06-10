@@ -7,7 +7,7 @@ import {
   move_to_tableau,
   auto_move_to_foundation,
 } from './pkg/canfield_wasm.js'
-import { createCardElement } from './card'
+import { createCardElement, createFoundationPlaceholder, createGlyphPlaceholder } from './card'
 import { api } from './api'
 import type { GameState, Card } from './types'
 
@@ -94,6 +94,8 @@ export function renderGameBoard(stateJson: string): void {
       reserveEl.appendChild(
         createCardElement(state.reserve[state.reserve.length - 1], { draggable: true }),
       )
+    } else {
+      reserveEl.appendChild(createGlyphPlaceholder('reserve', '🃏'))
     }
 
     for (let i = 0; i < 4; i++) {
@@ -101,6 +103,8 @@ export function renderGameBoard(stateJson: string): void {
       fEl.innerHTML = ''
       if (state.foundations[i].length > 0) {
         fEl.appendChild(createCardElement(state.foundations[i][state.foundations[i].length - 1]))
+      } else {
+        fEl.appendChild(createFoundationPlaceholder(state.baseRank, state.foundationSuits[i]))
       }
     }
 
@@ -114,6 +118,11 @@ export function renderGameBoard(stateJson: string): void {
         cardEl.dataset.colIndex = String(idx)
         tEl.appendChild(cardEl)
       })
+      // While the reserve still has cards, an empty column will auto-fill from
+      // it on the next move — hint that with a faded glyph.
+      if (state.tableau[col].length === 0 && state.reserve.length > 0) {
+        tEl.appendChild(createGlyphPlaceholder('tableau', '♦'))
+      }
     }
 
     const stockEl = document.getElementById('zone-stock')!
@@ -121,6 +130,8 @@ export function renderGameBoard(stateJson: string): void {
     if (state.stock.length > 0) {
       const dummy: Card = { id: 'stock', suit: 'spades', rank: 1, faceUp: false }
       stockEl.appendChild(createCardElement(dummy))
+    } else {
+      stockEl.appendChild(createGlyphPlaceholder('stock', '↺'))
     }
 
     const wasteEl = document.getElementById('waste-slot')!

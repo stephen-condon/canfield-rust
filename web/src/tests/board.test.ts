@@ -224,6 +224,59 @@ describe('tableau to foundation', () => {
   })
 })
 
+describe('empty-pile placeholders', () => {
+  const buildState = (over: Record<string, unknown> = {}): string =>
+    JSON.stringify({
+      baseRank: 11,
+      foundationSuits: ['hearts', 'diamonds', 'clubs', 'spades'],
+      foundations: [[], [], [], []],
+      tableau: [[], [], [], []],
+      reserve: [],
+      stock: [],
+      waste: [],
+      drawCount: 3,
+      moves: 0,
+      elapsedMs: 0,
+      won: false,
+      ...over,
+    })
+
+  const aCard = (id: string) => ({ id, suit: 'hearts', rank: 11, faceUp: true })
+
+  it('shows the base rank and suit on an empty foundation', () => {
+    renderGameBoard(buildState())
+    const hint = document.querySelector('#zone-foundation-0 .foundation-hint')!
+    expect(hint).toBeTruthy()
+    expect(hint.querySelector('.hint-rank')!.textContent).toBe('J')
+    expect(hint.querySelector('.hint-suit')!.textContent).toBe('♥')
+  })
+
+  it('does not show a foundation hint when the foundation has a card', () => {
+    renderGameBoard(buildState({ foundations: [[aCard('hearts_11')], [], [], []] }))
+    expect(document.querySelector('#zone-foundation-0 .foundation-hint')).toBeNull()
+  })
+
+  it('shows a reserve placeholder when the reserve is empty', () => {
+    renderGameBoard(buildState())
+    expect(document.querySelector('#zone-reserve .reserve-hint')).toBeTruthy()
+  })
+
+  it('shows a stock placeholder when the stock is empty', () => {
+    renderGameBoard(buildState())
+    expect(document.querySelector('#zone-stock .stock-hint')).toBeTruthy()
+  })
+
+  it('shows a tableau hint while the reserve still has cards', () => {
+    renderGameBoard(buildState({ reserve: [aCard('hearts_5')] }))
+    expect(document.querySelector('#zone-tableau-0 .tableau-hint')).toBeTruthy()
+  })
+
+  it('hides the tableau hint once the reserve is empty', () => {
+    renderGameBoard(buildState({ reserve: [] }))
+    expect(document.querySelector('#zone-tableau-0 .tableau-hint')).toBeNull()
+  })
+})
+
 describe('main menu', () => {
   it('shows New Game, Statistics, Preferences buttons', () => {
     renderMainMenu()

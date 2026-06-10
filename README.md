@@ -71,7 +71,7 @@ wasm-pack build crates/wasm --target web --out-dir ../../web/src/pkg
 
 ```bash
 # From web/:
-npm test                   # Vitest unit tests (37 tests, jsdom, run once)
+npm test                   # Vitest unit tests (43 tests, jsdom, run once)
 npm run test:watch         # Vitest in watch mode
 npm run test:e2e           # Playwright E2E tests (4 tests, launches dev server)
 npm run build              # tsc + Vite production build → dist/
@@ -85,7 +85,7 @@ npm run release            # Cut a release: compute version + open a PR (see Rel
 | Suite | Command | Count |
 |---|---|---|
 | Rust engine unit tests | `cargo test -p canfield-engine` | 52 |
-| Web unit tests (Vitest/jsdom) | `cd web && npm test` | 37 |
+| Web unit tests (Vitest/jsdom) | `cd web && npm test` | 43 |
 | E2E tests (Playwright/Chromium) | `cd web && npm run test:e2e` | 4 |
 
 All tests must pass before committing. Web unit tests are isolated: they mock the WASM module and the `api` localStorage adapter — no real WASM execution or browser storage in unit tests.
@@ -142,6 +142,8 @@ The first release has no prior tag, so pass an explicit version for it (`npm run
 - **Stock / Waste**: draw 1 or draw 3 per click. The waste pile may be redealt into the stock exactly once per cycle (order preserved).
 - **Win condition**: all 52 cards on the foundations.
 - **No undo**: by design.
+
+Empty piles show faded watermarks: each empty foundation shows the base rank and the suit it accepts (e.g. "J♥"), the empty reserve and stock show 🃏 and ↺, and an empty tableau column shows a ♦ hint while the reserve still has cards to auto-fill it.
 
 ## Persistence
 
